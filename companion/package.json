@@ -1,0 +1,19 @@
+{
+  "name": "dott-kanban-companion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Planka uzerine sablon (template) ve coklu-eksen gorunum ozellikleri ekleyen yardimci servis",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "build": "npm --prefix client install && npm --prefix client run build"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1"
+  }
+}

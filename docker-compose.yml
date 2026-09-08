@@ -1,0 +1,70 @@
+services:
+  # ---------------------------------------------------------------------------
+  # PLANKA — resmi imaj, DEĞİŞTİRİLMEDEN kullanılır.
+  # Güncellemek için: docker compose pull planka && docker compose up -d
+  # ---------------------------------------------------------------------------
+  planka:
+    image: ghcr.io/plankanban/planka:latest
+    restart: unless-stopped
+    volumes:
+      - planka-data:/app/data
+    ports:
+      - "${PLANKA_PORT:-3000}:1337"
+    environment:
+      - BASE_URL=${PLANKA_BASE_URL:-http://localhost:3000}
+      - DATABASE_URL=postgresql://postgres@postgres/planka
+      - SECRET_KEY=${PLANKA_SECRET_KEY}
+      - DEFAULT_ADMIN_EMAIL=${PLANKA_ADMIN_EMAIL}
+      - DEFAULT_ADMIN_PASSWORD=${PLANKA_ADMIN_PASSWORD}
+      - DEFAULT_ADMIN_NAME=${PLANKA_ADMIN_NAME:-DOTT Yonetici}
+      - DEFAULT_ADMIN_USERNAME=${PLANKA_ADMIN_USERNAME:-admin}
+      - DEFAULT_LANGUAGE=${PLANKA_DEFAULT_LANGUAGE:-tr-TR}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=planka
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d planka"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # COMPANION — bizim yazdığımız ek servis.
+  # Planka'nın koduna dokunmaz, sadece REST API'sini kullanır.
+  # Ek özellikler: Şablonlar (template) + Kategori (çoklu eksen) görünümü.
+  #
+  # Kendi kullanıcı sistemi yoktur: herkes buraya kendi Planka hesabıyla girer,
+  # istekler o kullanıcı adına yapılır (yetkiler ve "kim yaptı" kaydı Planka'daki
+  # gibi olur). Bu yüzden burada saklanan bir parola/servis hesabı yoktur.
+  # ---------------------------------------------------------------------------
+  companion:
+    build: ./companion
+    restart: unless-stopped
+    ports:
+      - "${COMPANION_PORT:-3001}:3001"
+    environment:
+      # Container ağı içinden Planka'ya doğrudan erişim
+      - PLANKA_INTERNAL_URL=http://planka:1337
+      # Tarayıcıya verilecek "Planka'da Aç" linkleri için dış adres
+      - PLANKA_PUBLIC_URL=${PLANKA_BASE_URL:-http://localhost:3000}
+      # HTTPS arkasında yayına alırken .env içinde true yapın
+      - COOKIE_SECURE=${COMPANION_COOKIE_SECURE:-false}
+      - DATABASE_PATH=/app/data/companion.db
+    volumes:
+      - companion-data:/app/data
+    depends_on:
+      - planka
+
+volumes:
+  planka-data:
+  db-data:
+  companion-data:
