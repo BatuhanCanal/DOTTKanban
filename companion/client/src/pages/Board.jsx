@@ -6,6 +6,7 @@ import { api } from '../api.js';
 import { useLoader } from '../hooks.js';
 import { colorOf } from '../colors.js';
 import Modal from '../components/Modal.jsx';
+import Timeline from '../components/Timeline.jsx';
 
 // Etiketi olmayan kartlarin toplandigi sanal sutun.
 const NO_LABEL = '__etiketsiz__';
@@ -22,6 +23,48 @@ function positionAtIndex(sortedPositions, index) {
 const formatDate = (value) =>
   new Date(value).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
 
+const pad = (n) => String(n).padStart(2, '0');
+
+/** Tarih girdisi (<input type="date">) icin yerel takvim gunu. */
+function toInputDay(value) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// Kanban sutunlarindaki siralama secenekleri. "Pano sirasi" Planka'daki gercek
+// siradir; tarihe gore siralama yalnizca gorunumu degistirir, Planka'ya yazilmaz.
+const SORTS = {
+  position: { label: 'Pano sirasi' },
+  'due-asc': { label: 'Bitis tarihi (once yakin)' },
+  'due-desc': { label: 'Bitis tarihi (once uzak)' },
+};
+
+/**
+ * Tarihe gore siralar. Tarihi olmayan kartlar her iki yonde de sona gider:
+ * "tarihsiz" bir kart ne en yakin ne en uzak tarihlidir, listenin dibi dogru yer.
+ */
+function sortCards(cards, sort) {
+  if (sort === 'position') {
+    return [...cards].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }
+
+  const yon = sort === 'due-asc' ? 1 : -1;
+
+  return [...cards].sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return (a.position ?? 0) - (b.position ?? 0);
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+
+    return yon * (new Date(a.dueDate) - new Date(b.dueDate));
+  });
+}
+
 export default function Board({ plankaUrl, onAuthLost }) {
   const { boardId } = useParams();
 
@@ -29,8 +72,14 @@ export default function Board({ plankaUrl, onAuthLost }) {
   const { data, error, loading, reload, setData } = useLoader(load, onAuthLost);
 
   const [axis, setAxis] = useState('list');
+  const [sort, setSort] = useState('position');
   const [actionError, setActionError] = useState(null);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [datesCard, setDatesCard] = useState(null);
+
+  // Tarihe gore siralanmisken surukleme kapalidir: birakilan yerin "kacinci
+  // sira" oldugu Planka'daki pozisyona karsilik gelmez, kart yanlis yere duser.
+  const dragDisabled = axis === 'list' && sort !== 'position';
 
   const listById = useMemo(
     () => Object.fromEntries((data?.lists || []).map((list) => [list.id, list])),
@@ -53,9 +102,10 @@ export default function Board({ plankaUrl, onAuthLost }) {
         color: list.color,
         // Pozisyona gore siralanir: surukleme sonrasi iyimser guncellemede kart
         // yeni yerinde gorunsun (sunucudan taze veri gelene kadar).
-        cards: data.cards
-          .filter((card) => card.listId === list.id)
-          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+        cards: sortCards(
+          data.cards.filter((card) => card.listId === list.id),
+          sort,
+        ),
       }));
     }
 
@@ -64,16 +114,22 @@ export default function Board({ plankaUrl, onAuthLost }) {
         id: label.id,
         title: label.name || 'Isimsiz etiket',
         color: label.color,
-        cards: data.cards.filter((card) => card.labelIds.includes(label.id)),
+        cards: sortCards(
+          data.cards.filter((card) => card.labelIds.includes(label.id)),
+          sort,
+        ),
       })),
       {
         id: NO_LABEL,
         title: 'Etiketsiz',
         color: null,
-        cards: data.cards.filter((card) => card.labelIds.length === 0),
+        cards: sortCards(
+          data.cards.filter((card) => card.labelIds.length === 0),
+          sort,
+        ),
       },
     ];
-  }, [data, axis]);
+  }, [data, axis, sort]);
 
   const onDragEnd = async (result) => {
     const { draggableId, source, destination } = result;
@@ -184,7 +240,30 @@ export default function Board({ plankaUrl, onAuthLost }) {
             >
               Kategoriye gore
             </button>
+            <button
+              type="button"
+              className={`tab ${axis === 'timeline' ? 'active' : ''}`}
+              onClick={() => setAxis('timeline')}
+            >
+              Zaman cizelgesi
+            </button>
           </div>
+
+          {axis !== 'timeline' && (
+            <select
+              className="sort-select"
+              value={sort}
+              onChange={(event) => setSort(event.target.value)}
+              title="Sutun icindeki kart sirasi"
+              aria-label="Siralama"
+            >
+              {Object.entries(SORTS).map(([value, option]) => (
+                <option key={value} value={value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
 
           <button type="button" className="btn" onClick={() => setSaveOpen(true)}>
             Sablon olarak kaydet
@@ -203,6 +282,17 @@ export default function Board({ plankaUrl, onAuthLost }) {
 
       {actionError && <div className="alert alert-error">{actionError}</div>}
 
+      {axis === 'timeline' && (
+        <Timeline board={data} plankaUrl={plankaUrl} onEditDates={setDatesCard} />
+      )}
+
+      {axis !== 'timeline' && dragDisabled && (
+        <div className="alert alert-info">
+          Tarihe gore siralanmisken kart surukleme kapalidir &mdash; birakilan yer Planka'daki
+          siraya karsilik gelmez. Sirayi degistirmek icin &ldquo;Pano sirasi&rdquo;na donun.
+        </div>
+      )}
+
       {axis === 'label' && data.labels.length === 0 && (
         <div className="alert alert-info">
           Bu panoda henuz etiket yok. Planka'da etiket olusturun (orn. Yiyecek, Icecek, Teknik);
@@ -210,6 +300,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
         </div>
       )}
 
+      {axis !== 'timeline' && (
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="board-scroll">
           <div className="board-columns">
@@ -238,6 +329,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
                           key={`${column.id}::${card.id}`}
                           draggableId={`${column.id}::${card.id}`}
                           index={index}
+                          isDragDisabled={dragDisabled}
                         >
                           {(dragProvided, dragSnapshot) => (
                             <div
@@ -283,8 +375,27 @@ export default function Board({ plankaUrl, onAuthLost }) {
                                   </span>
                                 )}
 
-                                {card.dueDate && (
-                                  <span className="chip chip-outline">{formatDate(card.dueDate)}</span>
+                                {/* Tarih rozeti ayni zamanda duzenleme girisidir:
+                                    tarihsiz kartlara da buradan tarih verilir. */}
+                                {card.dueDate || card.startDate ? (
+                                  <button
+                                    type="button"
+                                    className="chip chip-outline chip-button"
+                                    onClick={() => setDatesCard(card)}
+                                    title="Tarihleri duzenle"
+                                  >
+                                    {card.startDate ? `${formatDate(card.startDate)} → ` : ''}
+                                    {card.dueDate ? formatDate(card.dueDate) : 'bitis yok'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="chip chip-outline chip-button chip-add-date"
+                                    onClick={() => setDatesCard(card)}
+                                    title="Tarih ekle"
+                                  >
+                                    + tarih
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -300,11 +411,15 @@ export default function Board({ plankaUrl, onAuthLost }) {
           </div>
         </div>
       </DragDropContext>
+      )}
 
       <p className="muted small" style={{ marginTop: 16 }}>
-        {axis === 'list'
-          ? 'Kartlari surukleyerek durumunu degistirebilirsiniz. Kart basligina tiklayinca Planka’da acilir.'
-          : 'Kartlari surukleyerek kategorisini (etiketini) degistirebilirsiniz. Bir kart birden fazla etikete sahipse birden fazla sutunda gorunur; sutun ici siralama bu gorunumde saklanmaz.'}
+        {axis === 'list' &&
+          'Kartlari surukleyerek durumunu degistirebilirsiniz. Kart basligina tiklayinca Planka’da acilir.'}
+        {axis === 'label' &&
+          'Kartlari surukleyerek kategorisini (etiketini) degistirebilirsiniz. Bir kart birden fazla etikete sahipse birden fazla sutunda gorunur; sutun ici siralama bu gorunumde saklanmaz.'}
+        {axis === 'timeline' &&
+          'Cubugun sol ucu baslangic, sag ucu bitis tarihidir. Bitis tarihi Planka’da, baslangic tarihi companion’da saklanir; ikisini de cubuga tiklayarak duzenleyebilirsiniz.'}
       </p>
 
       {saveOpen && (
@@ -313,7 +428,112 @@ export default function Board({ plankaUrl, onAuthLost }) {
           onClose={() => setSaveOpen(false)}
         />
       )}
+
+      {datesCard && (
+        <CardDatesModal
+          card={datesCard}
+          boardId={boardId}
+          onClose={() => setDatesCard(null)}
+          onSaved={async () => {
+            setDatesCard(null);
+            await reload({ silent: true });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Kartin tarihlerini duzenler.
+ *
+ * Iki tarih iki ayri yerde yasar ve bu bilincli bir ayrimdir:
+ *   - BITIS  -> Planka'nin kendi alani (kartta, bildirimlerde, filtrelerde gorunur),
+ *   - BASLANGIC -> Planka'da boyle bir alan olmadigi icin companion'da.
+ * Once bitis yazilir: sunucu, baslangicin bitisten sonra olmadigini Planka'daki
+ * GUNCEL bitis tarihine bakarak dogruluyor.
+ */
+function CardDatesModal({ card, boardId, onClose, onSaved }) {
+  const [startDate, setStartDate] = useState(toInputDay(card.startDate));
+  const [dueDate, setDueDate] = useState(toInputDay(card.dueDate));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const ilkBaslangic = toInputDay(card.startDate);
+  const ilkBitis = toInputDay(card.dueDate);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (startDate && dueDate && startDate > dueDate) {
+      setError('Baslangic tarihi bitis tarihinden sonra olamaz.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      if (dueDate !== ilkBitis) {
+        await api.setDueDate(card.id, dueDate || null);
+      }
+
+      if (startDate !== ilkBaslangic) {
+        await api.setStartDate(card.id, boardId, startDate || null);
+      }
+
+      await onSaved();
+    } catch (caught) {
+      setError(caught.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Tarihler" subtitle={card.name} onClose={onClose}>
+      <form onSubmit={submit}>
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="field">
+          <label htmlFor="card-start">Baslangic tarihi</label>
+          <input
+            id="card-start"
+            type="date"
+            value={startDate}
+            max={dueDate || undefined}
+            onChange={(event) => setStartDate(event.target.value)}
+          />
+          <span className="muted small">
+            Planka'da bu alan yok; companion'da saklanir ve zaman cizelgesinde cubugun sol
+            ucunu belirler. Bos birakirsaniz kart cizelgede tek bir isaret olarak gorunur.
+          </span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="card-due">Bitis tarihi</label>
+          <input
+            id="card-due"
+            type="date"
+            value={dueDate}
+            min={startDate || undefined}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+          <span className="muted small">
+            Planka'ya yazilir; kartta ve Planka'nin kendi gorunumlerinde de gorunur. Saat
+            secmek isterseniz karti Planka'da acin.
+          </span>
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Vazgec
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

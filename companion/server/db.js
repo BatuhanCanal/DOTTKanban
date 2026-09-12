@@ -4,7 +4,9 @@
  * Companion'in kendi kucuk veritabani.
  *
  * Burada SADECE Planka'da karsiligi olmayan veri tutulur:
-
+ *   - sablonlar,
+ *   - kartlarin BASLANGIC tarihi (Planka kartta yalnizca bitis tarihi tutar;
+ *     zaman cizelgesinde cubuk cizebilmek icin baslangici biz sakliyoruz).
  * Kartlar, listeler, etiketler vb. her zaman Planka'da yasar; buraya kopyalanmaz.
  */
 
@@ -46,6 +48,22 @@ if (!templateColumns.includes('created_by_user_id')) {
   db.exec(`ALTER TABLE templates ADD COLUMN created_by_user_id TEXT`);
 }
 
+// Kartlarin baslangic tarihi. Planka'nin kart tablosunda boyle bir alan yok;
+// zaman cizelgesindeki cubugun sol ucu buradan gelir. Kart Planka'da silinirse
+// buradaki satir oksuz kalir - zararsizdir, cunku gorunum her zaman Planka'dan
+// gelen kart listesiyle eslestirilir (bkz. routes/boards.js).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS card_dates (
+    card_id TEXT PRIMARY KEY,
+    board_id TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    updated_by TEXT,
+    updated_at TEXT NOT NULL
+  );
+`);
+
+db.exec(`CREATE INDEX IF NOT EXISTS card_dates_board_id ON card_dates (board_id)`);
+
 const statements = {
   listTemplates: db.prepare(
     `SELECT id, name, description, source_board_id, source_board_name, created_by,
@@ -62,6 +80,20 @@ const statements = {
   ),
   renameTemplate: db.prepare(`UPDATE templates SET name = ?, description = ? WHERE id = ?`),
   deleteTemplate: db.prepare(`DELETE FROM templates WHERE id = ?`),
+
+  listCardDates: db.prepare(
+    `SELECT card_id, start_date FROM card_dates WHERE board_id = ?`,
+  ),
+  upsertCardDate: db.prepare(
+    `INSERT INTO card_dates (card_id, board_id, start_date, updated_by, updated_at)
+     VALUES (@cardId, @boardId, @startDate, @updatedBy, @updatedAt)
+     ON CONFLICT (card_id) DO UPDATE SET
+       board_id = @boardId,
+       start_date = @startDate,
+       updated_by = @updatedBy,
+       updated_at = @updatedAt`,
+  ),
+  deleteCardDate: db.prepare(`DELETE FROM card_dates WHERE card_id = ?`),
 };
 
 /** Satiri API'nin dondurdugu sekle cevirir (snapshot'tan sadece ozet bilgi verir). */
@@ -113,6 +145,16 @@ module.exports = {
   },
 
   deleteTemplate: (id) => statements.deleteTemplate.run(id).changes > 0,
+
+  /** Bir panodaki tum baslangic tarihleri: { kartId: 'YYYY-MM-DD' } */
+  listCardDates: (boardId) =>
+    Object.fromEntries(
+      statements.listCardDates.all(boardId).map((row) => [row.card_id, row.start_date]),
+    ),
+
+  setCardStartDate: (values) => statements.upsertCardDate.run(values),
+
+  clearCardStartDate: (cardId) => statements.deleteCardDate.run(cardId).changes > 0,
 
   presentTemplate,
 };

@@ -8,9 +8,34 @@
  */
 
 const planka = require('../planka');
+const db = require('../db');
 const { requireAuth } = require('../auth');
 const { asyncRoute } = require('../http');
 const { normalizeBoard } = require('../board-data');
+
+/** 'YYYY-MM-DD' mi? (Zaman cizelgesi gun hassasiyetinde calisir.) */
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDay(value) {
+  if (!DAY_PATTERN.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Kullanicinin bu karti gercekten gorebildigini Planka'ya sorar ve karti doner.
+ * Companion'in kendi veritabanina kart bazli bir sey yazmadan once sart:
+ * yoksa giris yapmis herkes, erisemedigi bir panonun kartina tarih yazabilirdi.
+ */
+async function findCardOnBoard(token, boardId, cardId) {
+  const board = normalizeBoard(await planka.getBoard(token, boardId));
+
+  return board.cards.find((card) => card.id === cardId) || null;
+}
 
 /**
  * Bir listeye "index" sirasinda eklenecek kartin pozisyonunu hesaplar.
@@ -40,7 +65,17 @@ module.exports = (app) => {
     requireAuth,
     asyncRoute(async (req, res) => {
       const response = await planka.getBoard(req.plankaToken, req.params.boardId);
-      res.json(normalizeBoard(response));
+      const board = normalizeBoard(response);
+
+      // Baslangic tarihleri Planka'da degil companion'da durur; burada birlestirilir.
+      const startDates = db.listCardDates(req.params.boardId);
+
+      board.cards = board.cards.map((card) => ({
+        ...card,
+        startDate: startDates[card.id] || null,
+      }));
+
+      res.json(board);
     }),
   );
 
@@ -109,6 +144,81 @@ module.exports = (app) => {
       await planka.updateCard(req.plankaToken, req.params.cardId, {
         listId,
         position: positionAtIndex(positions, index),
+      });
+
+      res.json({ ok: true });
+    }),
+  );
+
+  // --- Zaman cizelgesi tarihleri ------------------------------------------
+  // Baslangic tarihi COMPANION'da, bitis tarihi PLANKA'da durur. Ayrim bilincli:
+  // bitis tarihi Planka'nin kendi alani (kartta, bildirimlerde, filtrelerde
+  // gorunur), baslangic ise Planka'da olmayan bir bilgi.
+
+  app.put(
+    '/api/cards/:cardId/start-date',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const { boardId, startDate } = req.body || {};
+
+      if (!boardId) {
+        res.status(400).json({ error: 'boardId gerekli.' });
+        return;
+      }
+
+      const card = await findCardOnBoard(req.plankaToken, boardId, req.params.cardId);
+
+      if (!card) {
+        res.status(404).json({ error: 'Kart bu panoda bulunamadi.' });
+        return;
+      }
+
+      // null/bos gonderilmesi "baslangic tarihini kaldir" demektir.
+      if (!startDate) {
+        db.clearCardStartDate(req.params.cardId);
+        res.json({ ok: true, startDate: null });
+        return;
+      }
+
+      if (!isValidDay(startDate)) {
+        res.status(400).json({ error: 'Tarih YYYY-AA-GG biciminde olmali.' });
+        return;
+      }
+
+      if (card.dueDate && startDate > card.dueDate.slice(0, 10)) {
+        res.status(400).json({ error: 'Baslangic tarihi bitis tarihinden sonra olamaz.' });
+        return;
+      }
+
+      db.setCardStartDate({
+        cardId: req.params.cardId,
+        boardId,
+        startDate,
+        updatedBy: req.user.name || req.user.username || null,
+        updatedAt: new Date().toISOString(),
+      });
+
+      res.json({ ok: true, startDate });
+    }),
+  );
+
+  // Bitis tarihi Planka'ya yazilir: kullanicinin kendi token'iyla, boylece
+  // degisiklik Planka'nin gecmisinde dogru kisiye yazilir.
+  app.put(
+    '/api/cards/:cardId/due-date',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const { dueDate } = req.body || {};
+
+      if (dueDate && !isValidDay(dueDate)) {
+        res.status(400).json({ error: 'Tarih YYYY-AA-GG biciminde olmali.' });
+        return;
+      }
+
+      // Gun ortasi (12:00 UTC) yaziyoruz: hangi saat diliminde okunursa okunsun
+      // takvim gunu kaymaz. Planka'nin kendi arayuzunden saat de secilebilir.
+      await planka.updateCard(req.plankaToken, req.params.cardId, {
+        dueDate: dueDate ? `${dueDate}T12:00:00.000Z` : null,
       });
 
       res.json({ ok: true });

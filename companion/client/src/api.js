@@ -50,6 +50,10 @@ export const api = {
   moveCard: (cardId, boardId, listId, index) =>
     request('PATCH', `/api/cards/${cardId}/move`, { boardId, listId, index }),
 
+  setStartDate: (cardId, boardId, startDate) =>
+    request('PUT', `/api/cards/${cardId}/start-date`, { boardId, startDate }),
+  setDueDate: (cardId, dueDate) => request('PUT', `/api/cards/${cardId}/due-date`, { dueDate }),
+
   templates: () => request('GET', '/api/templates'),
   saveTemplate: (boardId, name, description) =>
     request('POST', '/api/templates', { boardId, name, description }),

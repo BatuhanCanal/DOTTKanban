@@ -7,7 +7,7 @@ Topluluk etkinliklerini herkesin görebileceği şekilde yönetmek için kurulan
 | Parça | Ne işe yarar | Kim yazdı |
 |---|---|---|
 | **Planka** | Asıl Kanban aracı: birimler (proje), etkinlikler (pano), sütunlar, kartlar, yorumlar, dosyalar | Açık kaynak, resmî Docker imajı — **hiç değiştirilmedi** |
-| **Companion** | Planka'da olmayan iki özellik: **şablonlar** ve **kategori (çoklu eksen) görünümü** | Bu depo |
+| **Companion** | Planka'da olmayan özellikler: **şablonlar**, **kategori (çoklu eksen) görünümü** ve **zaman çizelgesi (Gantt)** | Bu depo |
 
 Companion, Planka'nın kaynak koduna dokunmaz; yalnızca Planka'nın REST API'sini kullanan
 ayrı bir servistir. Bu sayede **Planka'yı güncellemek companion'ı bozmaz** — Planka'yı
@@ -22,6 +22,8 @@ istediğiniz zaman `docker compose pull planka` ile yeni sürüme çekebilirsini
 | Durum sütunları (Yapılacak / Devam Ediyor / Tamamlandı) | **List** |
 | Görev | **Card** |
 | Kategori (Yiyecek, İçecek, Teknik, Tanıtım...) | **Label** (bir karta birden fazla atanabilir) |
+| Görevin bitiş tarihi | **Card.dueDate** |
+| Görevin başlangıç tarihi | Planka'da **yok** — companion saklar (bkz. Tarihler ve zaman çizelgesi) |
 
 Bir kart aynı anda hem bir **durumda** (list) hem de birden fazla **kategoride** (label)
 olabildiği için, aynı pano iki farklı eksene göre gruplanarak gösterilebiliyor.
@@ -71,8 +73,16 @@ ilk girişini Planka üzerinden yapmalıdır.** Sonrasında aynı hesapla compan
   - *Kategoriye göre*: aynı kartlar, bu kez etikete göre gruplanır (Yiyecek, İçecek...).
     Kart sürüklemek kartın etiketini değiştirir. Bir kart birden fazla etiketliyse birden
     fazla sütunda görünür.
+  - *Zaman çizelgesi*: tarihi olan kartlar bir zaman ekseninde, Gantt benzeri çubuklar
+    olarak görünür. Satırlar durum sütunlarına göre gruplanır, dikey kırmızı çizgi bugünü
+    gösterir. Çubuğun rengi kartın kategorisinden (etiketinden) gelir.
   - Her kartta diğer eksenin bilgisi rozet olarak görünür, böylece iki eksen aynı anda okunur.
   - Kart başlığına tıklayınca kart Planka'da açılır — yorum, dosya, atama gibi işler orada yapılır.
+- **Sıralama** — Kanban görünümlerinde sütun içindeki kart sırası seçilebilir: *Pano sırası*
+  (Planka'daki gerçek sıra) veya *bitiş tarihine göre* (yakından uzağa / uzaktan yakına).
+  Tarihi olmayan kartlar her iki yönde de sona gider. Tarihe göre sıralanmışken kart
+  sürükleme kapanır: bırakılan yer Planka'daki sıraya karşılık gelmediği için kart yanlış
+  yere düşerdi.
 - **Şablon olarak kaydet** — açık panonun sütunlarını, etiketlerini, kartlarını ve kart içi
   kontrol listelerini şablon olarak saklar. Panoda hiçbir şey değişmez.
 - **Şablonlar** — kayıtlı şablonlar listelenir. "Bu şablondan etkinlik aç" ile seçilen birimde
@@ -80,6 +90,37 @@ ilk girişini Planka üzerinden yapmalıdır.** Sonrasında aynı hesapla compan
 
 Şablona **alınmayanlar** (bilerek): son tarihler, tamamlanma işaretleri, kişi atamaları,
 yorumlar ve ekler. Yeni etkinlik temiz başlar.
+
+## Tarihler ve zaman çizelgesi
+
+Planka kartlarda **yalnızca bitiş tarihi** tutar; başlangıç tarihi diye bir alanı yoktur.
+Gantt çubuğunun iki ucu olması gerektiği için başlangıç tarihini companion kendi
+veritabanında saklar — tıpkı şablonlarda olduğu gibi, Planka'nın koduna dokunmadan.
+
+| Tarih | Nerede durur | Sonucu |
+|---|---|---|
+| **Bitiş** | Planka (kartın kendi alanı) | Planka'nın kartında, filtrelerinde ve bildirimlerinde de görünür |
+| **Başlangıç** | Companion (`card_dates` tablosu) | Yalnızca companion'da görünür; Planka'da karşılığı yoktur |
+
+İkisi de companion'dan düzenlenir: bir çubuğa (veya karttaki tarih rozetine) tıklayın.
+Bitiş tarihi kullanıcının kendi Planka oturumuyla yazılır, böylece değişiklik Planka'nın
+geçmişinde doğru kişiye işlenir. Başlangıç tarihi yazılmadan önce sunucu, kullanıcının o
+kartı gerçekten görebildiğini Planka'ya sorar — yoksa giriş yapmış herkes erişemediği bir
+panonun kartına tarih yazabilirdi.
+
+Çizelgede bir kart:
+
+- **başlangıcı ve bitişi varsa** → iki tarih arasında uzanan bir çubuk,
+- **yalnızca bitişi varsa** → o güne konmuş bir elmas işareti (başlangıç verince çubuğa döner),
+- **hiç tarihi yoksa** → çizelgede görünmez; kaç kartın tarihsiz olduğu altta yazar.
+
+Geçmiş tarihli ve tamamlanmamış kartlar kırmızı çerçeveyle, tamamlanmış olanlar soluk gösterilir.
+
+Şablonlara **hiçbir tarih alınmaz** (bitiş de başlangıç da): yeni etkinlik temiz başlar.
+
+> Not: başlangıç tarihleri companion'ın veritabanında durduğu için yedeklemede
+> `companion.db` artık yalnızca şablonları değil bu tarihleri de taşır — `scripts/yedek-al.sh`
+> zaten üçünü birden alıyor.
 
 ## Yapı
 
@@ -94,9 +135,11 @@ companion/
     auth.js            Planka hesabıyla giriş, token doğrulama, yönetici kontrolü
     rate-limit.js      giriş denemesi sayacı (kaba kuvvete karşı)
     board-data.js      pano verisini görünüm ve şablon biçimine çevirir
-    routes/            hub, boards (görünüm + kart taşıma), templates
-    db.js              şablonlar için SQLite (Node'un yerleşik node:sqlite modülü)
+    routes/            hub, boards (görünüm + kart taşıma + tarihler), templates
+    db.js              şablonlar ve başlangıç tarihleri için SQLite (node:sqlite)
   client/              React + Vite arayüz
+    components/
+      Timeline.jsx     zaman çizelgesi (Gantt benzeri görünüm)
 ```
 
 ## Kimlik doğrulama ve yetki
@@ -188,5 +231,9 @@ docker compose restart companion
   ayrı bir sayfadır. Companion'daki her panodan tek tıkla Planka'ya geçilir.
 - Kategori görünümünde bir sütun içindeki kart sırası kalıcı değildir — Planka bir kartın
   "şu etiket içindeki sırası" diye bir bilgi tutmaz. Sütunlar arası taşıma (asıl işlev) kalıcıdır.
+- Başlangıç tarihleri yalnızca companion'da görünür; Planka'nın kendi kart ekranında
+  bitiş tarihi vardır ama başlangıç yoktur. Planka'da bir kart silinirse companion'daki
+  başlangıç tarihi satırı öksüz kalır — zararsızdır, görünüm her zaman Planka'dan gelen
+  kart listesiyle eşleştirilir.
 - Planka'nın REST API'si sürümler arası kırılabilir. Kırılırsa bakılacak tek dosya
   `companion/server/planka.js`.
