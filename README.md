@@ -74,8 +74,8 @@ ilk girişini Planka üzerinden yapmalıdır.** Sonrasında aynı hesapla compan
     Kart sürüklemek kartın etiketini değiştirir. Bir kart birden fazla etiketliyse birden
     fazla sütunda görünür.
   - *Zaman çizelgesi*: tarihi olan kartlar bir zaman ekseninde, Gantt benzeri çubuklar
-    olarak görünür. Satırlar durum sütunlarına göre gruplanır, dikey kırmızı çizgi bugünü
-    gösterir. Çubuğun rengi kartın kategorisinden (etiketinden) gelir.
+    olarak görünür. Dikey kırmızı çizgi bugünü gösterir; çizelge açılırken bugüne kaydırılır.
+    Çubuğun rengi kartın kategorisinden (etiketinden) gelir. Ayrıntılar aşağıda.
   - Her kartta diğer eksenin bilgisi rozet olarak görünür, böylece iki eksen aynı anda okunur.
   - Kart başlığına tıklayınca kart Planka'da açılır — yorum, dosya, atama gibi işler orada yapılır.
 - **Sıralama** — Kanban görünümlerinde sütun içindeki kart sırası seçilebilir: *Pano sırası*
@@ -102,11 +102,22 @@ veritabanında saklar — tıpkı şablonlarda olduğu gibi, Planka'nın koduna 
 | **Bitiş** | Planka (kartın kendi alanı) | Planka'nın kartında, filtrelerinde ve bildirimlerinde de görünür |
 | **Başlangıç** | Companion (`card_dates` tablosu) | Yalnızca companion'da görünür; Planka'da karşılığı yoktur |
 
-İkisi de companion'dan düzenlenir: bir çubuğa (veya karttaki tarih rozetine) tıklayın.
+İkisi de companion'dan düzenlenir (nasıl olduğu aşağıda).
 Bitiş tarihi kullanıcının kendi Planka oturumuyla yazılır, böylece değişiklik Planka'nın
 geçmişinde doğru kişiye işlenir. Başlangıç tarihi yazılmadan önce sunucu, kullanıcının o
 kartı gerçekten görebildiğini Planka'ya sorar — yoksa giriş yapmış herkes erişemediği bir
 panonun kartına tarih yazabilirdi.
+
+Çizelgenin üstündeki kontroller:
+
+| Kontrol | Ne yapar |
+|---|---|
+| **Gruplama** | Satırları duruma (sütun), kategoriye (etiket) göre gruplar veya hiç gruplamaz. Kategoriye göre gruplanınca çok etiketli bir kart birden fazla satırda görünür — Kanban'daki kategori görünümüyle aynı mantık. |
+| **Ölçek** | Gün genişliğini büyütür/küçültür. Varsayılan olarak plana göre otomatik seçilir; elle değiştirdikten sonra *sığdır* ile otomatiğe dönersiniz. |
+| **Tamamlananları gizle** | Biten görevleri çizelgeden çıkarır. |
+| **Bugüne git** | Çizelgeyi bugünün olduğu yere kaydırır. |
+
+Sağ üstte özet durur: kaç tarihli görev var, kaçı gecikmiş, kaçı tamamlanmış, kaç kart tarihsiz.
 
 Çizelgede bir kart:
 
@@ -115,6 +126,18 @@ panonun kartına tarih yazabilirdi.
 - **hiç tarihi yoksa** → çizelgede görünmez; kaç kartın tarihsiz olduğu altta yazar.
 
 Geçmiş tarihli ve tamamlanmamış kartlar kırmızı çerçeveyle, tamamlanmış olanlar soluk gösterilir.
+Kartın kontrol listesi varsa çubuğun koyu bölümü biten oranı gösterir; sol sütunda ayrıca
+`3/4` gibi bir sayaç ve karta atanmış kişilerin baş harfleri görünür.
+
+**Tarihleri değiştirmenin iki yolu var:**
+
+- **Sürükleyerek** — çubuğu tutup kaydırmak iki tarihi birlikte öteler, uçlarından tutup
+  çekmek yalnızca o ucu değiştirir. Gün hassasiyetinde yuvarlanır, bıraktığınızda kaydedilir.
+  Yanlışlıkla başlarsanız fareyi bırakmadan **Esc**'e basın, hiçbir şey yazılmaz.
+  Yalnızca bitiş tarihi olan bir kartı (elmas) sürüklemek yalnızca bitişi taşır; sürükleme
+  olmayan bir tarihi yaratmaz.
+- **Tıklayarak** — çubuğa (veya karttaki tarih rozetine) tıklayınca tarihleri yazabileceğiniz
+  kutu açılır. Klavyeyle de erişilebilen yol budur.
 
 Şablonlara **hiçbir tarih alınmaz** (bitiş de başlangıç da): yeni etkinlik temiz başlar.
 

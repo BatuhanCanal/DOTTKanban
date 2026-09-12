@@ -81,6 +81,47 @@ export default function Board({ plankaUrl, onAuthLost }) {
   // sira" oldugu Planka'daki pozisyona karsilik gelmez, kart yanlis yere duser.
   const dragDisabled = axis === 'list' && sort !== 'position';
 
+  /**
+   * Zaman cizelgesinde cubuk surukleyince cagrilir.
+   *
+   * Once ekranda gosterip sonra kaydediyoruz (iyimser guncelleme): surukleme
+   * bittiginde cubuk yerine zipladiysa kotu hissettirir. Bitis tarihi ONCE
+   * yazilir; sunucu baslangici Planka'daki GUNCEL bitise gore dogruladigi
+   * icin sira onemli.
+   */
+  const shiftDates = useCallback(
+    async (card, { startDate, dueDate }) => {
+      setActionError(null);
+      setData((current) => ({
+        ...current,
+        cards: current.cards.map((item) =>
+          item.id === card.id
+            ? {
+                ...item,
+                startDate,
+                dueDate: dueDate ? `${dueDate}T12:00:00.000Z` : null,
+              }
+            : item,
+        ),
+      }));
+
+      try {
+        if (dueDate !== toInputDay(card.dueDate)) {
+          await api.setDueDate(card.id, dueDate);
+        }
+
+        if (startDate !== (card.startDate || null)) {
+          await api.setStartDate(card.id, boardId, startDate);
+        }
+      } catch (caught) {
+        setActionError(caught.message);
+      } finally {
+        await reload({ silent: true });
+      }
+    },
+    [boardId, reload, setData],
+  );
+
   const listById = useMemo(
     () => Object.fromEntries((data?.lists || []).map((list) => [list.id, list])),
     [data],
@@ -283,7 +324,12 @@ export default function Board({ plankaUrl, onAuthLost }) {
       {actionError && <div className="alert alert-error">{actionError}</div>}
 
       {axis === 'timeline' && (
-        <Timeline board={data} plankaUrl={plankaUrl} onEditDates={setDatesCard} />
+        <Timeline
+          board={data}
+          plankaUrl={plankaUrl}
+          onEditDates={setDatesCard}
+          onShiftDates={shiftDates}
+        />
       )}
 
       {axis !== 'timeline' && dragDisabled && (
@@ -419,7 +465,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
         {axis === 'label' &&
           'Kartlari surukleyerek kategorisini (etiketini) degistirebilirsiniz. Bir kart birden fazla etikete sahipse birden fazla sutunda gorunur; sutun ici siralama bu gorunumde saklanmaz.'}
         {axis === 'timeline' &&
-          'Cubugun sol ucu baslangic, sag ucu bitis tarihidir. Bitis tarihi Planka’da, baslangic tarihi companion’da saklanir; ikisini de cubuga tiklayarak duzenleyebilirsiniz.'}
+          'Cubugun sol ucu baslangic, sag ucu bitis tarihidir. Bitis tarihi Planka’da, baslangic tarihi companion’da saklanir.'}
       </p>
 
       {saveOpen && (

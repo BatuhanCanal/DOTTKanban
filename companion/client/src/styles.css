@@ -607,8 +607,8 @@ h3 {
 }
 
 .tl-label {
-  flex: 0 0 220px;
-  width: 220px;
+  flex: 0 0 240px;
+  width: 240px;
   position: sticky;
   left: 0;
   z-index: 4;
@@ -622,11 +622,13 @@ h3 {
   text-overflow: ellipsis;
 }
 
-.tl-label a {
+.tl-name {
   color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tl-head-label {
@@ -659,6 +661,13 @@ h3 {
   font-weight: 600;
   color: var(--muted);
   border-left: 1px solid var(--border);
+}
+
+/* Ay adi, kaydirildiginda bandin icinde kalsin: yoksa uzun bir ayin adi
+   soldan tasip gorunmez oluyor. */
+.tl-month span {
+  position: sticky;
+  left: 4px;
   padding-left: 4px;
 }
 
@@ -742,6 +751,9 @@ h3 {
 .tl-row {
   display: flex;
   align-items: stretch;
+  /* Sabit yukseklik: cubuk (top 6 + 18) satirin icinde kalmali, satirin
+     yuksekligini soldaki metin belirlememeli. */
+  height: 30px;
   border-bottom: 1px solid var(--border);
   position: relative;
   font-size: 13px;
@@ -751,7 +763,6 @@ h3 {
   border-bottom: 0;
 }
 
-.tl-bar,
 .tl-milestone {
   position: absolute;
   border: 0;
@@ -760,16 +771,9 @@ h3 {
   color: #fff;
 }
 
-.tl-bar {
-  top: 6px;
-  height: 18px;
-  border-radius: 4px;
-  overflow: hidden;
-  text-align: left;
-  box-shadow: var(--shadow);
-}
-
-.tl-bar span {
+/* Cubuk uzerindeki gorev adi. Yalnizca govdedeki metni hedefler: cubugun icinde
+   ilerleme dolgusu da bir span, o etkilenmemeli. */
+.tl-bar-body span {
   display: block;
   padding: 0 6px;
   font-size: 11px;
@@ -868,4 +872,239 @@ h3 {
   color: var(--text);
   font: inherit;
   font-size: 13px;
+}
+
+/* --- Zaman cizelgesi: ust kontrol seridi ---------------------------------- */
+
+.tl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.tl-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tl-control select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.tl-check {
+  cursor: pointer;
+}
+
+.tl-check input {
+  margin: 0;
+}
+
+.tl-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.tl-zoom button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tl-zoom button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tl-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tl-summary {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tl-summary .is-overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Metin gibi gorunen dugme (uyari kutusundaki "tamamlananlari goster"). */
+.linklike {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* --- Zaman cizelgesi: satir icerigi --------------------------------------- */
+
+.tl-row:hover .tl-label,
+.tl-row:hover {
+  background: var(--surface-2);
+}
+
+.tl-label {
+  gap: 6px;
+}
+
+/* Kontrol listesi ilerlemesi ve sorumlu kisiler, gorev adinin sagina sigar. */
+.tl-tasks {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-avatar {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.tl-group-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-group-count {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tl-monthline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  opacity: 1;
+  filter: brightness(0.85);
+}
+
+/* --- Zaman cizelgesi: cubuk ve surukleme ---------------------------------- */
+
+/* Cubuk artik bir kap: icinde ilerleme dolgusu, tiklanabilir govde ve iki
+   boyutlandirma tutamagi var. */
+.tl-bar {
+  position: absolute;
+  top: 6px;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+/* Kontrol listesinin biten orani. Koyu bolum "bu kadari yapildi" demek;
+   acik birakmak tersini cagristiriyordu. */
+.tl-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.26);
+  border-right: 1px solid rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+.tl-bar-body {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #fff;
+  text-align: left;
+  cursor: grab;
+  font: inherit;
+}
+
+.tl-scroll.is-dragging,
+.tl-scroll.is-dragging .tl-bar-body {
+  cursor: grabbing;
+}
+
+/* Surukleme sirasinda metin secilmesin. */
+.tl-scroll.is-dragging {
+  user-select: none;
+}
+
+.tl-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  opacity: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.tl-handle-start {
+  left: 0;
+}
+
+.tl-handle-end {
+  right: 0;
+}
+
+.tl-bar:hover .tl-handle {
+  opacity: 1;
+}
+
+.tl-bar.is-moving {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  opacity: 0.85;
+}
+
+.tl-milestone.is-moving {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tl-milestone {
+  cursor: grab;
+}
+
+.tl-swatch-progress {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 74%, black) 55%,
+    var(--accent) 55%
+  );
 }
