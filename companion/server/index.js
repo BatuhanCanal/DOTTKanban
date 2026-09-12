@@ -12,6 +12,13 @@ const { errorHandler } = require('./http');
 const app = express();
 
 app.disable('x-powered-by');
+
+// Ters vekil arkasindaysa gercek istemci IP'si X-Forwarded-For'dan okunur.
+// Giris hiz siniri (server/rate-limit.js) dogru calissin diye gerekli.
+if (config.trustProxy > 0) {
+  app.set('trust proxy', config.trustProxy);
+}
+
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -54,7 +61,28 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
+// --- Acilista yapilandirma kontrolu ---------------------------------------
+// Yayina alirken en sik atlanan iki ayar; sessizce gecmek yerine uyariyoruz.
+function warnAboutConfig() {
+  const isHttps = config.plankaPublicUrl.startsWith('https://');
+
+  if (isHttps && !config.cookieSecure) {
+    console.warn(
+      '[companion] UYARI: adres https ama COOKIE_SECURE=false. Oturum cerezi sifrelenmemis\n' +
+        '            baglantida da gonderilir. .env icinde COMPANION_COOKIE_SECURE=true yapin.',
+    );
+  }
+
+  if (isHttps && config.trustProxy === 0) {
+    console.warn(
+      '[companion] UYARI: https arkasinda ama TRUST_PROXY ayarlanmamis. Giris hiz siniri\n' +
+        '            tum kullanicilari tek IP sayar. Tek bir ters vekil varsa TRUST_PROXY=1 yapin.',
+    );
+  }
+}
+
 app.listen(config.port, () => {
   console.log(`[companion] http://localhost:${config.port} adresinde calisiyor`);
   console.log(`[companion] Planka API: ${config.plankaInternalUrl}`);
+  warnAboutConfig();
 });

@@ -12,10 +12,11 @@ module.exports = (app) => {
     requireAuth,
     asyncRoute(async (req, res) => {
       const response = await planka.getProjects(req.plankaToken);
+      const included = response.included || {};
 
       const boardsByProjectId = new Map();
 
-      for (const board of response.included.boards || []) {
+      for (const board of included.boards || []) {
         if (!boardsByProjectId.has(board.projectId)) {
           boardsByProjectId.set(board.projectId, []);
         }

@@ -53,6 +53,8 @@ export const api = {
   templates: () => request('GET', '/api/templates'),
   saveTemplate: (boardId, name, description) =>
     request('POST', '/api/templates', { boardId, name, description }),
+  renameTemplate: (id, name, description) =>
+    request('PATCH', `/api/templates/${id}`, { name, description }),
   deleteTemplate: (id) => request('DELETE', `/api/templates/${id}`),
   instantiateTemplate: (id, options) => request('POST', `/api/templates/${id}/instantiate`, options),
 };

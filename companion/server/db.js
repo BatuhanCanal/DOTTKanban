@@ -3,7 +3,8 @@
 /**
  * Companion'in kendi kucuk veritabani.
  *
- * Burada SADECE Planka'da karsiligi olmayan veri tutulur: sablonlar.
+ * Burada SADECE Planka'da karsiligi olmayan veri tutulur:
+
  * Kartlar, listeler, etiketler vb. her zaman Planka'da yasar; buraya kopyalanmaz.
  */
 
@@ -30,21 +31,34 @@ db.exec(`
     source_board_id TEXT,
     source_board_name TEXT,
     created_by TEXT,
+    created_by_user_id TEXT,
     snapshot TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
 `);
 
+// Gecis: created_by_user_id daha sonra eklendi. Once kaydedilmis sablonlarda
+// bu alan NULL kalir; sahibi bilinmedigi icin onlari yalnizca Planka yoneticisi
+// silebilir/yeniden adlandirabilir (bkz. routes/templates.js).
+const templateColumns = db.prepare(`PRAGMA table_info(templates)`).all().map((c) => c.name);
+
+if (!templateColumns.includes('created_by_user_id')) {
+  db.exec(`ALTER TABLE templates ADD COLUMN created_by_user_id TEXT`);
+}
+
 const statements = {
   listTemplates: db.prepare(
-    `SELECT id, name, description, source_board_id, source_board_name, created_by, snapshot, created_at
+    `SELECT id, name, description, source_board_id, source_board_name, created_by,
+            created_by_user_id, snapshot, created_at
        FROM templates
       ORDER BY created_at DESC`,
   ),
   getTemplate: db.prepare(`SELECT * FROM templates WHERE id = ?`),
   insertTemplate: db.prepare(
-    `INSERT INTO templates (name, description, source_board_id, source_board_name, created_by, snapshot, created_at)
-     VALUES (@name, @description, @sourceBoardId, @sourceBoardName, @createdBy, @snapshot, @createdAt)`,
+    `INSERT INTO templates (name, description, source_board_id, source_board_name, created_by,
+                            created_by_user_id, snapshot, created_at)
+     VALUES (@name, @description, @sourceBoardId, @sourceBoardName, @createdBy,
+             @createdByUserId, @snapshot, @createdAt)`,
   ),
   renameTemplate: db.prepare(`UPDATE templates SET name = ?, description = ? WHERE id = ?`),
   deleteTemplate: db.prepare(`DELETE FROM templates WHERE id = ?`),
@@ -71,6 +85,7 @@ function presentTemplate(row) {
     sourceBoardId: row.source_board_id,
     sourceBoardName: row.source_board_name,
     createdBy: row.created_by,
+    createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     stats: {
       lists: (snapshot.lists || []).length,

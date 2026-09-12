@@ -21,5 +21,10 @@ module.exports = {
   // HTTPS arkasinda calisirken true yapin (cerez sadece guvenli baglantida gonderilir).
   cookieSecure: process.env.COOKIE_SECURE === 'true',
 
+  // Ters vekil (nginx, Traefik, Caddy...) arkasinda calisiyorsa: kac vekil var?
+  // Bu ayarlanmazsa her istek vekilin IP'sinden geliyormus gibi gorunur ve giris
+  // hiz siniri herkesi ayni kovaya koyar. Tek bir nginx varsa 1 yazin.
+  trustProxy: Number(process.env.TRUST_PROXY || 0),
+
   cookieName: 'dott_token',
 };

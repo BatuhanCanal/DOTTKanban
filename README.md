@@ -86,18 +86,52 @@ yorumlar ve ekler. Yeni etkinlik temiz başlar.
 ```
 docker-compose.yml     planka + postgres + companion
 .env.example           ayarlar şablonu
+scripts/
+  yedek-al.sh          üç veri deposunu birden yedekler
 companion/
   server/              Express API
     planka.js          Planka REST API istemcisi (Planka ile tek temas noktası)
+    auth.js            Planka hesabıyla giriş, token doğrulama, yönetici kontrolü
+    rate-limit.js      giriş denemesi sayacı (kaba kuvvete karşı)
     board-data.js      pano verisini görünüm ve şablon biçimine çevirir
     routes/            hub, boards (görünüm + kart taşıma), templates
     db.js              şablonlar için SQLite (Node'un yerleşik node:sqlite modülü)
   client/              React + Vite arayüz
 ```
 
+## Kimlik doğrulama ve yetki
+
+Uygulamaya **yalnızca Planka hesabı olanlar** girebilir; giriş yapmayan hiç kimse hiçbir veri göremez.
+
 Companion'ın kendi kullanıcı sistemi yoktur: herkes **kendi Planka hesabıyla** girer ve tüm
 istekler o kullanıcı adına yapılır. Böylece yetkiler Planka'daki yetkilerle birebir aynıdır ve
 yapılan değişiklikler Planka'nın geçmişinde doğru kişiye yazılır. Companion hiçbir parola saklamaz.
+
+Nasıl işliyor:
+
+- Giriş yapılınca Planka'dan alınan token `httpOnly` + `SameSite=Lax` bir çerezde tutulur
+  (JavaScript okuyamaz, siteler arası isteklerde gönderilmez).
+- **Her istekte** çerezteki token Planka'ya doğrulatılır (`GET /api/users/me`), 60 saniyelik
+  bir önbellekle. Çerezin varlığına güvenmek yetmez: şablon uçları gibi Planka'ya hiç gitmeyen
+  uçlarda uydurma bir çerezle gelen birine kapıyı açardı. Planka'da silinen veya parolası
+  değişen bir hesap en geç 60 saniye içinde düşer.
+- Giriş denemeleri sayılır: aynı hesap+IP için 5, aynı IP için 30 başarısız denemeden
+  sonra 10 dakika beklenir. Parola doğrulaması Planka'ya devredildiği için, sınır
+  koymazsak Planka'nın önünde açık bir parola deneme kapısı bırakmış olurduk.
+- Pano, liste ve kart yetkileri tamamen Planka'nındır — kullanıcı Planka'da üye olmadığı
+  bir projeyi companion'da da göremez.
+- **Şablonlar** companion'ın kendi verisidir, o yüzden kuralı burada koyduk: giriş yapmış
+  herkes şablonları **görür ve kullanır** (topluluk içi paylaşım için), ama bir şablonu
+  **yalnızca onu oluşturan kişi veya Planka yöneticisi** silebilir/yeniden adlandırabilir.
+  Sahibi kayıtlı olmayan eski şablonlara yalnızca yönetici dokunabilir.
+
+Planka'da açık kayıt (self-registration) yoktur: hesapları yönetici açar. Yani "hesabı olan"
+kümesini siz belirlersiniz.
+
+> **Ters vekil arkasında yayına alıyorsanız** `.env` içinde `COMPANION_TRUST_PROXY=1` yapın.
+> Yoksa companion her isteği nginx'in IP'sinden geliyormuş gibi görür ve giriş hız sınırı
+> tüm topluluğu tek kovaya koyar. Aynı şekilde `COMPANION_COOKIE_SECURE=true` yapın.
+> Companion açılışta bu iki ayarı kontrol eder ve eksikse log'a uyarı yazar.
 
 ## Bakım
 
@@ -115,9 +149,38 @@ docker compose logs -f companion
 docker compose down -v
 ```
 
-Veriler iki yerde durur: Planka'nın verisi `db-data`/`planka-data` volume'lerinde,
-companion'ın şablonları `companion-data` volume'ünde (`/app/data/companion.db`).
-Yedek alırken üçünü birden alın.
+### Yedekleme
+
+Veri **üç** ayrı yerde durur ve üçü birden alınmazsa yedek işe yaramaz: Planka'nın veritabanı
+(`db-data`), Planka'ya yüklenen dosyalar (`planka-data`) ve companion'ın şablonları
+(`companion-data`). Script üçünü birden alır:
+
+```bash
+./scripts/yedek-al.sh              # -> ./yedekler/2026-09-12_1723/
+./scripts/yedek-al.sh /mnt/yedek   # başka bir hedefe
+```
+
+Servisler çalışırken çalıştırılabilir: Postgres için `pg_dump`, SQLite için `VACUUM INTO`
+kullanılır, ikisi de tutarlı bir anlık görüntü verir. Düzenli yedek için crontab'a ekleyin:
+
+```
+0 3 * * * cd /opt/dott-kanban && ./scripts/yedek-al.sh /mnt/yedek >> /var/log/dott-yedek.log 2>&1
+```
+
+Çıkan dizini **başka bir makineye veya diske** kopyalayın; aynı sunucuda duran yedek yedek değildir.
+
+**Geri yükleme** (her şeyin silineceğini unutmayın):
+
+```bash
+docker compose down
+docker compose up -d postgres && sleep 5
+zcat yedekler/<damga>/planka-db.sql.gz | docker compose exec -T postgres psql -U postgres -d planka
+docker compose up -d planka
+zcat yedekler/<damga>/planka-data.tar.gz | docker compose exec -T planka tar -C /app/data -xf -
+docker compose up -d companion
+docker compose cp yedekler/<damga>/companion.db companion:/app/data/companion.db
+docker compose restart companion
+```
 
 ## Bilinen sınırlar
 

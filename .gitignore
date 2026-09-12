@@ -6,3 +6,6 @@ data/
 *.db-journal
 *.log
 .DS_Store
+
+# Yedekler (yedek-al.sh ciktisi) - depoya girmez
+yedekler/

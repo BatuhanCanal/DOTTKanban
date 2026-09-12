@@ -11,7 +11,7 @@ const formatDateTime = (value) =>
     year: 'numeric',
   });
 
-export default function Templates({ onAuthLost }) {
+export default function Templates({ user, isAdmin, onAuthLost }) {
   const load = useCallback(
     async () => {
       const [templates, hub] = await Promise.all([api.templates(), api.hub()]);
@@ -22,7 +22,13 @@ export default function Templates({ onAuthLost }) {
 
   const { data, error, loading, reload } = useLoader(load, onAuthLost);
   const [using, setUsing] = useState(null);
+  const [renaming, setRenaming] = useState(null);
   const [actionError, setActionError] = useState(null);
+
+  // Silme yetkisi sunucuda da kontrol edilir; buradaki kontrol yalnizca
+  // kullanilamayacak dugmeyi gostermemek icin.
+  const canManage = (template) =>
+    isAdmin || (Boolean(template.createdByUserId) && template.createdByUserId === user.id);
 
   const remove = async (template) => {
     if (!window.confirm(`"${template.name}" sablonu silinsin mi? Panolar etkilenmez.`)) {
@@ -94,13 +100,24 @@ export default function Templates({ onAuthLost }) {
               >
                 Bu sablondan etkinlik ac
               </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-danger"
-                onClick={() => remove(template)}
-              >
-                Sil
-              </button>
+              {canManage(template) && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => setRenaming(template)}
+                  >
+                    Duzenle
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => remove(template)}
+                  >
+                    Sil
+                  </button>
+                </>
+              )}
             </div>
           ))
         )}
@@ -113,7 +130,82 @@ export default function Templates({ onAuthLost }) {
           onClose={() => setUsing(null)}
         />
       )}
+
+      {renaming && (
+        <RenameTemplateModal
+          template={renaming}
+          onClose={() => setRenaming(null)}
+          onSaved={async () => {
+            setRenaming(null);
+            await reload({ silent: true });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function RenameTemplateModal({ template, onClose, onSaved }) {
+  const [name, setName] = useState(template.name);
+  const [description, setDescription] = useState(template.description || '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      await api.renameTemplate(template.id, name.trim(), description.trim() || null);
+      await onSaved();
+    } catch (caught) {
+      setError(caught.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Sablonu duzenle"
+      subtitle="Yalnizca sablonun adi ve aciklamasi degisir; icindeki yapiya dokunulmaz."
+      onClose={onClose}
+    >
+      <form onSubmit={submit}>
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="field">
+          <label htmlFor="rename-name">Sablon adi</label>
+          <input
+            id="rename-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="rename-description">Aciklama (istege bagli)</label>
+          <input
+            id="rename-description"
+            type="text"
+            value={description}
+            placeholder="Orn. iki gunluk atolye duzeni"
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Vazgec
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+            {busy ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

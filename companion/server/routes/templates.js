@@ -13,7 +13,7 @@
 const planka = require('../planka');
 const db = require('../db');
 const config = require('../config');
-const { requireAuth } = require('../auth');
+const { requireAuth, isAdmin } = require('../auth');
 const { asyncRoute } = require('../http');
 const { buildSnapshot } = require('../board-data');
 
@@ -25,7 +25,7 @@ const boardUrl = (boardId) => `${config.plankaPublicUrl}/boards/${boardId}`;
 async function nextBoardPosition(token, projectId) {
   const response = await planka.getProjects(token);
 
-  const positions = (response.included.boards || [])
+  const positions = ((response.included || {}).boards || [])
     .filter((board) => board.projectId === projectId)
     .map((board) => board.position ?? 0);
 
@@ -107,6 +107,14 @@ async function replaySnapshot(token, boardId, snapshot, options) {
   return { lists: listIds.length, labels: labelIds.length, cards: createdCards };
 }
 
+/**
+ * Sablonu duzenleme/silme yetkisi: sablonu olusturan kisi veya Planka yoneticisi.
+ * Sahibi bilinmeyen eski kayitlar (created_by_user_id NULL) yalnizca yoneticiye aciktir.
+ */
+function canManage(row, user) {
+  return isAdmin(user) || (Boolean(row.created_by_user_id) && row.created_by_user_id === user.id);
+}
+
 module.exports = (app) => {
   app.get(
     '/api/templates',
@@ -129,14 +137,14 @@ module.exports = (app) => {
 
       const boardResponse = await planka.getBoard(req.plankaToken, boardId);
       const snapshot = buildSnapshot(boardResponse);
-      const me = await planka.getMe(req.plankaToken);
 
       const template = db.createTemplate({
         name: (name || snapshot.board.name || 'Isimsiz sablon').trim(),
         description: description || null,
         sourceBoardId: boardId,
         sourceBoardName: snapshot.board.name,
-        createdBy: me.item.name || me.item.username || null,
+        createdBy: req.user.name || req.user.username || null,
+        createdByUserId: req.user.id,
         snapshot: JSON.stringify(snapshot),
         createdAt: new Date().toISOString(),
       });
@@ -156,6 +164,11 @@ module.exports = (app) => {
         return;
       }
 
+      if (!canManage(row, req.user)) {
+        res.status(403).json({ error: 'Bu sablonu yalnizca olusturan kisi veya yonetici duzenleyebilir.' });
+        return;
+      }
+
       const { name, description } = req.body || {};
 
       res.json({
@@ -172,11 +185,19 @@ module.exports = (app) => {
     '/api/templates/:id',
     requireAuth,
     asyncRoute(async (req, res) => {
-      if (!db.deleteTemplate(Number(req.params.id))) {
+      const row = db.getTemplateRow(Number(req.params.id));
+
+      if (!row) {
         res.status(404).json({ error: 'Sablon bulunamadi.' });
         return;
       }
 
+      if (!canManage(row, req.user)) {
+        res.status(403).json({ error: 'Bu sablonu yalnizca olusturan kisi veya yonetici silebilir.' });
+        return;
+      }
+
+      db.deleteTemplate(row.id);
       res.json({ ok: true });
     }),
   );

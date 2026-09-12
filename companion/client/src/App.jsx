@@ -8,7 +8,7 @@ import Board from './pages/Board.jsx';
 import Templates from './pages/Templates.jsx';
 
 export default function App() {
-  const [session, setSession] = useState(null); // { user, plankaUrl }
+  const [session, setSession] = useState(null); // { user, isAdmin, plankaUrl }
   const [checking, setChecking] = useState(true);
 
   const refreshSession = useCallback(async () => {
@@ -83,7 +83,12 @@ export default function App() {
           path="/pano/:boardId"
           element={<Board plankaUrl={session.plankaUrl} onAuthLost={handleAuthLost} />}
         />
-        <Route path="/sablonlar" element={<Templates onAuthLost={handleAuthLost} />} />
+        <Route
+          path="/sablonlar"
+          element={
+            <Templates user={session.user} isAdmin={session.isAdmin} onAuthLost={handleAuthLost} />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
