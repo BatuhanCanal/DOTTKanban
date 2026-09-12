@@ -54,6 +54,52 @@ docker compose up -d
 İlk girişte Planka kullanım şartlarını kabul etmenizi ister; bu yüzden **her yeni hesap
 ilk girişini Planka üzerinden yapmalıdır.** Sonrasında aynı hesapla companion'a girilebilir.
 
+### Halihazırda çalışan bir Planka'nız varsa
+
+Depodaki `docker-compose.yml` **kendi Planka'sını ve Postgres'ini** ayağa kaldırır. Zaten
+veri barındıran bir Planka çalışıyorsa o dosyayı kullanmayın; yalnızca companion'ı mevcut
+kurulumunuza ekleyin. Planka'nızın `docker-compose.yml` dosyasına şu servisi ekleyin:
+
+```yaml
+  companion:
+    build: ./DOTTKanban/companion      # depoyu nereye kopyaladıysanız orası
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:3001:3001
+    environment:
+      # Aynı compose dosyasındaki Planka servisinin adı ve iç portu
+      - PLANKA_INTERNAL_URL=http://planka:1337
+      # Tarayıcıya verilecek "Planka'da aç" linkleri için dış adres
+      - PLANKA_PUBLIC_URL=https://plan.ornek.org
+      - COOKIE_SECURE=true
+      - TRUST_PROXY=1
+      - DATABASE_PATH=/app/data/companion.db
+    volumes:
+      - companion-data:/app/data
+    depends_on:
+      - planka
+```
+
+ve dosyanın en altındaki `volumes:` listesine `companion-data:` satırını ekleyin. Sonra:
+
+```bash
+docker compose up -d --build companion
+```
+
+Bu düzende **`.env` dosyasına hiç ihtiyaç yoktur**: `.env.example`'daki `PLANKA_SECRET_KEY`
+ve `PLANKA_ADMIN_*` değerleri yalnızca sıfırdan Planka kuran compose dosyası içindir, sizin
+Planka'nızın kendi ayarları zaten var. Companion'ın ihtiyaç duyduğu tek şey yukarıdaki beş
+ortam değişkenidir.
+
+Companion 127.0.0.1:3001'de dinler; ters vekilinizden ona **ayrı bir alt alan adı** verin
+(örn. `kanban.ornek.org`). Alt yol (`ornek.org/kanban`) çalışmaz — arayüz kök dizinden
+sunulmak üzere derlenir.
+
+> **cloudflared'i konteyner olarak çalıştırıyorsanız** hedef adres `http://localhost:3001`
+> değil `http://companion:3001` olmalıdır: konteynerin içindeki `localhost` sunucunun kendisi
+> değil, o konteynerdir. cloudflared'i aynı compose ağına alın. Sunucuya servis olarak
+> kurduysanız `http://localhost:3001` doğrudur.
+
 ### İlk yapılandırma (Planka içinde, bir kez)
 
 1. Yönetici hesabıyla Planka'ya girin.
@@ -224,6 +270,13 @@ Veri **üç** ayrı yerde durur ve üçü birden alınmazsa yedek işe yaramaz: 
 ```bash
 ./scripts/yedek-al.sh              # -> ./yedekler/2026-09-12_1723/
 ./scripts/yedek-al.sh /mnt/yedek   # başka bir hedefe
+```
+
+Companion'ı mevcut bir Planka kurulumuna eklediyseniz (yukarı bakın), compose dosyasının
+bulunduğu dizini `COMPOSE_DIR` ile verin:
+
+```bash
+COMPOSE_DIR=/opt/planka ./scripts/yedek-al.sh /mnt/yedek
 ```
 
 Servisler çalışırken çalıştırılabilir: Postgres için `pg_dump`, SQLite için `VACUUM INTO`

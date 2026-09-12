@@ -10,19 +10,29 @@
 # Kullanim:  ./scripts/yedek-al.sh [hedef-dizin]
 # Varsayilan hedef: ./yedekler
 #
+# Servisler bu deponun docker-compose.yml'inde degil de baska bir compose
+# dosyasindaysa (orn. companion mevcut bir Planka kurulumuna eklendiyse), o
+# dizini COMPOSE_DIR ile verin:
+#   COMPOSE_DIR=/opt/planka ./scripts/yedek-al.sh /mnt/yedek
+#
 # Servisler CALISIRKEN calistirilabilir: postgres icin pg_dump, SQLite icin
 # "VACUUM INTO" kullanilir; ikisi de tutarli bir anlik goruntu verir.
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Yedek dosyalari komutun calistirildigi dizine gore yazilir, docker compose
+# ise COMPOSE_DIR'de calistirilir (varsayilan: bu deponun koku).
+HEDEF_KOK="$PWD"
+cd "${COMPOSE_DIR:-$(dirname "$0")/..}"
 
-HEDEF="${1:-yedekler}"
+HEDEF="${1:-$HEDEF_KOK/yedekler}"
+case "$HEDEF" in /*) ;; *) HEDEF="$HEDEF_KOK/$HEDEF" ;; esac
 DAMGA="$(date +%Y-%m-%d_%H%M)"
 DIZIN="$HEDEF/$DAMGA"
 
 if ! docker compose ps --status running --services | grep -qx postgres; then
-  echo "HATA: postgres calismiyor. Once 'docker compose up -d' deyin." >&2
+  echo "HATA: $(pwd) dizinindeki compose yiginida calisan bir 'postgres' servisi yok." >&2
+  echo "      Yigin baska bir dizindeyse: COMPOSE_DIR=/o/dizin $0 $*" >&2
   exit 1
 fi
 
