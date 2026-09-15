@@ -64,6 +64,36 @@ db.exec(`
 
 db.exec(`CREATE INDEX IF NOT EXISTS card_dates_board_id ON card_dates (board_id)`);
 
+// --- Etiket turleri ---------------------------------------------------------
+// Planka'da etiketler tek bir duz havuzdur; "Ekip" ve "Etkinlik Turu" gibi iki
+// AYRI eksen bilmez. Her ekseni burada bir "tur" olarak tanimlariz; panodaki
+// bir etiketi ture bagladigimizda, pano sayfasinda o tur icin ayri bir
+// "... gore" gorunum sekmesi dogar. Etiketlerin kendisi Planka'da kalir:
+// burada yalnizca hangi etiketin hangi ture ait oldugu tutulur.
+//
+// Kural: bir tur icinde bir kart yalnizca TEK etiket tasir (tek ekip, tek
+// etkinlik turu). Bu kural sunucuda degil arayuzde uygulanir; surukleme
+// kodu kartin o turdeki eski etiketini dusurup yenisini ekler.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS label_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS label_group_items (
+    group_id INTEGER NOT NULL REFERENCES label_groups (id) ON DELETE CASCADE,
+    board_id TEXT NOT NULL,
+    label_id TEXT NOT NULL,
+    PRIMARY KEY (group_id, board_id, label_id)
+  );
+`);
+
+db.exec(`CREATE INDEX IF NOT EXISTS label_group_items_board ON label_group_items (board_id)`);
+
 const statements = {
   listTemplates: db.prepare(
     `SELECT id, name, description, source_board_id, source_board_name, created_by,
@@ -83,6 +113,28 @@ const statements = {
 
   listCardDates: db.prepare(
     `SELECT card_id, start_date FROM card_dates WHERE board_id = ?`,
+  ),
+
+  listLabelGroups: db.prepare(
+    `SELECT id, name, position, created_at FROM label_groups ORDER BY position, id`,
+  ),
+  getLabelGroup: db.prepare(`SELECT id, name, position FROM label_groups WHERE id = ?`),
+  insertLabelGroup: db.prepare(
+    `INSERT INTO label_groups (name, position, created_at) VALUES (@name, @position, @createdAt)`,
+  ),
+  renameLabelGroup: db.prepare(`UPDATE label_groups SET name = ? WHERE id = ?`),
+  deleteLabelGroup: db.prepare(`DELETE FROM label_groups WHERE id = ?`),
+  listLabelGroupItems: db.prepare(
+    `SELECT group_id, board_id, label_id FROM label_group_items ORDER BY board_id`,
+  ),
+  listLabelGroupItemsForBoard: db.prepare(
+    `SELECT group_id, label_id FROM label_group_items WHERE board_id = ?`,
+  ),
+  addLabelGroupItem: db.prepare(
+    `INSERT OR IGNORE INTO label_group_items (group_id, board_id, label_id) VALUES (?, ?, ?)`,
+  ),
+  removeLabelGroupItem: db.prepare(
+    `DELETE FROM label_group_items WHERE group_id = ? AND board_id = ? AND label_id = ?`,
   ),
   upsertCardDate: db.prepare(
     `INSERT INTO card_dates (card_id, board_id, start_date, updated_by, updated_at)
@@ -155,6 +207,71 @@ module.exports = {
   setCardStartDate: (values) => statements.upsertCardDate.run(values),
 
   clearCardStartDate: (cardId) => statements.deleteCardDate.run(cardId).changes > 0,
+
+  // --- Etiket turleri ---
+  listLabelGroups: () =>
+    statements.listLabelGroups.all().map((row) => ({
+      id: row.id,
+      name: row.name,
+      position: row.position,
+      createdAt: row.created_at,
+    })),
+
+  getLabelGroup: (id) => statements.getLabelGroup.get(id),
+
+  createLabelGroup: (name) => {
+    const maxPosition = db
+      .prepare(`SELECT COALESCE(MAX(position), 0) AS m FROM label_groups`)
+      .get().m;
+    const info = statements.insertLabelGroup.run({
+      name,
+      position: maxPosition + 1,
+      createdAt: new Date().toISOString(),
+    });
+    return statements.getLabelGroup.get(info.lastInsertRowid);
+  },
+
+  renameLabelGroup: (id, name) => {
+    statements.renameLabelGroup.run(name, id);
+    return statements.getLabelGroup.get(id);
+  },
+
+  deleteLabelGroup: (id) => statements.deleteLabelGroup.run(id).changes > 0,
+
+  /**
+   * Bir panodaki etiket->tur baglantilari.
+   * Donus: { groupId: [labelId, ...] } biciminde sade bir harita.
+   */
+  listLabelGroupItemsForBoard: (boardId) => {
+    const rows = statements.listLabelGroupItemsForBoard.all(boardId);
+    const map = {};
+
+    for (const row of rows) {
+      if (!map[row.group_id]) {
+        map[row.group_id] = [];
+      }
+
+      map[row.group_id].push(row.label_id);
+    }
+
+    return map;
+  },
+
+  /** Panodaki tum baglantilar (tur adlariyla birlikte) — admin arayuzu icin. */
+  listLabelGroupItemsDetailed: () => {
+    const rows = statements.listLabelGroupItems.all();
+    return rows.map((row) => ({
+      groupId: row.group_id,
+      boardId: row.board_id,
+      labelId: row.label_id,
+    }));
+  },
+
+  addLabelToGroup: (groupId, boardId, labelId) =>
+    statements.addLabelGroupItem.run(groupId, boardId, labelId).changes > 0,
+
+  removeLabelFromGroup: (groupId, boardId, labelId) =>
+    statements.removeLabelGroupItem.run(groupId, boardId, labelId).changes > 0,
 
   presentTemplate,
 };

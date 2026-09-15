@@ -89,7 +89,7 @@ async function requireAuth(req, res, next) {
   const token = req.cookies[config.cookieName];
 
   if (!token) {
-    res.status(401).json({ error: 'Giris yapmaniz gerekiyor.' });
+    res.status(401).json({ error: 'Giriş yapmanız gerekiyor.' });
     return;
   }
 
@@ -113,7 +113,7 @@ async function requireAuth(req, res, next) {
     if (error instanceof planka.PlankaError && (error.status === 401 || error.status === 403)) {
       tokenCache.delete(token);
       clearTokenCookie(res);
-      res.status(401).json({ error: 'Oturum suresi doldu, tekrar giris yapin.' });
+      res.status(401).json({ error: 'Oturum süresi doldu, tekrar giris yapin.' });
       return;
     }
 
@@ -126,7 +126,7 @@ function registerAuthRoutes(app) {
     const { emailOrUsername, password } = req.body || {};
 
     if (!emailOrUsername || !password) {
-      res.status(400).json({ error: 'Kullanici adi ve sifre gerekli.' });
+      res.status(400).json({ error: 'Kullanıcı adı ve şifre gerekli.' });
       return;
     }
 
@@ -138,7 +138,7 @@ function registerAuthRoutes(app) {
 
       res.set('Retry-After', String(blocked.retryAfterSeconds));
       res.status(429).json({
-        error: `Cok fazla hatali deneme yapildi. Yaklasik ${minutes} dakika sonra tekrar deneyin.`,
+        error: `Çok fazla hatalı deneme yapildi. Yaklasik ${minutes} dakika sonra tekrar deneyin.`,
       });
       return;
     }
@@ -164,7 +164,7 @@ function registerAuthRoutes(app) {
 
       if (error instanceof planka.PlankaError && error.status === 401) {
         rateLimit.recordFailure(ip, emailOrUsername);
-        res.status(401).json({ error: 'Kullanici adi veya sifre hatali.' });
+        res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı.' });
         return;
       }
 

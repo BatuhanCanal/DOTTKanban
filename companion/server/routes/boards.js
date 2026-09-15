@@ -12,6 +12,7 @@ const db = require('../db');
 const { requireAuth } = require('../auth');
 const { asyncRoute } = require('../http');
 const { normalizeBoard } = require('../board-data');
+const varsayilanListeler = require('../varsayilan-listeler');
 
 /** 'YYYY-MM-DD' mi? (Zaman cizelgesi gun hassasiyetinde calisir.) */
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,6 +75,19 @@ module.exports = (app) => {
         ...card,
         startDate: startDates[card.id] || null,
       }));
+
+      // Etiket turleri (Ekip, Etkinlik Turu...) companion'da durur; pano
+      // verisine eklenir ki arayuz dinamik "... gore" sekmeleri uretebilsin.
+      const groupItems = db.listLabelGroupItemsForBoard(req.params.boardId);
+      const groups = db.listLabelGroups();
+
+      board.labelGroups = groups
+        .map((group) => ({
+          id: group.id,
+          name: group.name,
+          labelIds: groupItems[group.id] || [],
+        }))
+        .filter((group) => group.labelIds.length > 0);
 
       res.json(board);
     }),
@@ -169,7 +183,7 @@ module.exports = (app) => {
       const card = await findCardOnBoard(req.plankaToken, boardId, req.params.cardId);
 
       if (!card) {
-        res.status(404).json({ error: 'Kart bu panoda bulunamadi.' });
+        res.status(404).json({ error: 'Kart bu panoda bulunamadı.' });
         return;
       }
 
@@ -181,12 +195,12 @@ module.exports = (app) => {
       }
 
       if (!isValidDay(startDate)) {
-        res.status(400).json({ error: 'Tarih YYYY-AA-GG biciminde olmali.' });
+        res.status(400).json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı.' });
         return;
       }
 
       if (card.dueDate && startDate > card.dueDate.slice(0, 10)) {
-        res.status(400).json({ error: 'Baslangic tarihi bitis tarihinden sonra olamaz.' });
+        res.status(400).json({ error: 'Başlangıç tarihi bitiş tarihinden sonra olamaz.' });
         return;
       }
 
@@ -211,7 +225,7 @@ module.exports = (app) => {
       const { dueDate } = req.body || {};
 
       if (dueDate && !isValidDay(dueDate)) {
-        res.status(400).json({ error: 'Tarih YYYY-AA-GG biciminde olmali.' });
+        res.status(400).json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı.' });
         return;
       }
 
@@ -222,6 +236,164 @@ module.exports = (app) => {
       });
 
       res.json({ ok: true });
+    }),
+  );
+
+  // --------------------------------------------------------------------------
+  // GÖREV EKLE (Companion içinden)
+  //
+  // Kullanıcı kuralı: yeni göreve eklerken bu panoya bağlı etiket turlerinin
+  // HEPSİ atanmış olmalı (örn. Ekip + Etkinlik Türü). Bu kural sunucu seviyesinde
+  // zorunlu: assignments içinde eksik tür varsa istek reddedilir.
+  // --------------------------------------------------------------------------
+  app.post(
+    '/api/boards/:boardId/cards',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const boardId = req.params.boardId;
+      const { name, listId, assignments = {}, startDate, dueDate, description } =
+        req.body || {};
+
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        res.status(400).json({ error: 'Görev adı gerekli.' });
+        return;
+      }
+
+      const response = await planka.getBoard(req.plankaToken, boardId);
+      const board = normalizeBoard(response);
+
+      // 1) Hedef liste (varsayılan: ilk aktif sütun = Başlanmadı)
+      const hedefListe = listId ? board.lists.find((list) => list.id === listId) : board.lists[0];
+
+      if (!hedefListe) {
+        res
+          .status(400)
+          .json({ error: 'Bu panoda aktif sütun yok; önce Planka\'da bir liste oluşturun.' });
+        return;
+      }
+
+      // 2) Etiket türü zorunluluğu: bu panoya bağlı VE en az bir etiketi
+      //    olan türler zorunludur; bağlı etiketi hiç olmayan tur istenemez.
+      const baglanmis = db.listLabelGroupItemsForBoard(boardId);
+      const groups = db.listLabelGroups();
+
+      const eksikTur = [];
+
+      for (const group of groups) {
+        const bagliEtiketler = baglanmis[group.id] || [];
+
+        if (bagliEtiketler.length === 0) {
+          continue;
+        }
+
+        const secim = assignments[group.id];
+
+        if (!secim || !bagliEtiketler.includes(String(secim))) {
+          eksikTur.push(group.name);
+        }
+      }
+
+      if (eksikTur.length > 0) {
+        res.status(400).json({
+          error:
+            'Bu panoda şu etiket türleri atanmalıdır: ' +
+            eksikTur.join(', ') +
+            '. Görevi kaydetmeden önce eksik olanları seçin.',
+          eksikTurler: eksikTur,
+        });
+        return;
+      }
+
+      const secilenEtiketler = Object.values(assignments);
+
+      const boardEtiketIds = new Set(board.labels.map((label) => label.id));
+
+      for (const labelId of secilenEtiketler) {
+        if (!boardEtiketIds.has(labelId)) {
+          res.status(400).json({ error: 'Seçilen etiketlerden biri bu panoda bulunmuyor.' });
+          return;
+        }
+      }
+
+      // 3) Tarih doğrulama
+      if (startDate && dueDate && startDate > dueDate) {
+        res.status(400).json({ error: 'Başlangıç tarihi bitiş tarihinden sonra olamaz.' });
+        return;
+      }
+
+      // 4) Kart oluşturma: sütundaki mevcut maksimum pozisyonun sonrası
+      const listPositions = board.cards
+        .filter((card) => card.listId === hedefListe.id)
+        .map((card) => card.position ?? 0)
+        .sort((a, b) => a - b);
+
+      const pozisyon =
+        listPositions.length === 0
+          ? planka.POSITION_GAP
+          : Math.max(...listPositions) + planka.POSITION_GAP;
+
+      const created = await planka.createCard(req.plankaToken, hedefListe.id, {
+        name: name.trim(),
+        position: pozisyon,
+        description,
+      });
+
+      const cardId = created.item.id;
+
+      // 5) Etiketleri yaz
+      for (const labelId of secilenEtiketler) {
+        try {
+          await planka.addCardLabel(req.plankaToken, cardId, labelId);
+        } catch (error) {
+          if (!(error instanceof planka.PlankaError && error.status === 409)) {
+            throw error;
+          }
+        }
+      }
+
+      // 6) Tarihleri yaz: bitiş Planka'da, başlangıç companion'da.
+      if (dueDate) {
+        await planka.updateCard(req.plankaToken, cardId, {
+          dueDate: `${dueDate}T12:00:00.000Z`,
+        });
+      }
+
+      if (startDate) {
+        db.setCardStartDate({
+          cardId,
+          boardId,
+          startDate,
+          updatedBy: req.user.name || req.user.username || null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      res.status(201).json({
+        ok: true,
+        cardId,
+        listId: hedefListe.id,
+        etiketler: secilenEtiketler,
+      });
+    }),
+  );
+
+  // Eksik varsayılan listeleri ekler (örn. İptal Edildi).
+  app.post(
+    '/api/boards/:boardId/varsayilan-listeler',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const sonuc = await varsayilanListeler.ensure(req.plankaToken, req.params.boardId);
+      res.json({ ok: true, ...sonuc });
+    }),
+  );
+
+  // Panoda eksik varsayılan liste var mı?
+  app.get(
+    '/api/boards/:boardId/eksik-listeler',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const sonuc = await varsayilanListeler.eksikler(req.plankaToken, req.params.boardId);
+      res.json(sonuc);
     }),
   );
 };

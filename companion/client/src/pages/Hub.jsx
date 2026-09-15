@@ -9,7 +9,7 @@ export default function Hub({ onAuthLost }) {
   const { data, error, loading } = useLoader(load, onAuthLost);
 
   if (loading) {
-    return <div className="loading">Birimler yukleniyor...</div>;
+    return <div className="loading">Birimler yükleniyor...</div>;
   }
 
   return (
@@ -18,7 +18,7 @@ export default function Hub({ onAuthLost }) {
         <div>
           <h1>Etkinlikler</h1>
           <p className="muted small" style={{ margin: '4px 0 0' }}>
-            Her birim bir klasor, her etkinlik o klasorde bir pano. Panolar Planka'da tutulur.
+            Her birim bir klasör, her etkinlik o klasörde bir pano. Panolar Planka'da tutulur.
           </p>
         </div>
       </div>
@@ -28,7 +28,7 @@ export default function Hub({ onAuthLost }) {
       {data && data.projects.length === 0 && (
         <div className="panel">
           <div className="empty">
-            Henuz birim yok. Planka'yi acip bir proje (birim) olusturun, burada gorunecek.
+            Henüz birim yok. Planka'yı açıp bir proje (birim) oluşturun, burada görünecek.
           </div>
         </div>
       )}
@@ -45,7 +45,7 @@ export default function Hub({ onAuthLost }) {
 
             {project.boards.length === 0 ? (
               <div className="empty small">
-                Bu birimde henuz pano yok. Sablonlar sayfasindan hazir bir sablondan
+                Bu birimde henüz pano yok. Şablonlar sayfasından hazır bir şablondan
                 olusturabilirsiniz.
               </div>
             ) : (
@@ -55,7 +55,7 @@ export default function Hub({ onAuthLost }) {
                     <div className="row-title">{board.name}</div>
                   </div>
                   <Link className="btn btn-sm btn-primary" to={`/pano/${board.id}`}>
-                    Gorunumler
+                    Görünümler
                   </Link>
                 </div>
               ))

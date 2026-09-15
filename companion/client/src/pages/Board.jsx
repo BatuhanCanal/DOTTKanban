@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 
@@ -7,6 +7,7 @@ import { useLoader } from '../hooks.js';
 import { colorOf } from '../colors.js';
 import Modal from '../components/Modal.jsx';
 import Timeline from '../components/Timeline.jsx';
+import AddTaskModal from '../components/AddTaskModal.jsx';
 
 // Etiketi olmayan kartlarin toplandigi sanal sutun.
 const NO_LABEL = '__etiketsiz__';
@@ -37,12 +38,12 @@ function toInputDay(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// Kanban sutunlarindaki siralama secenekleri. "Pano sirasi" Planka'daki gercek
+// Kanban sutunlarindaki siralama secenekleri. "Pano sırası" Planka'daki gercek
 // siradir; tarihe gore siralama yalnizca gorunumu degistirir, Planka'ya yazilmaz.
 const SORTS = {
-  position: { label: 'Pano sirasi' },
-  'due-asc': { label: 'Bitis tarihi (once yakin)' },
-  'due-desc': { label: 'Bitis tarihi (once uzak)' },
+  position: { label: 'Pano sırası' },
+  'due-asc': { label: 'Bitiş tarihi (önce yakın)' },
+  'due-desc': { label: 'Bitiş tarihi (önce uzak)' },
 };
 
 /**
@@ -76,16 +77,29 @@ export default function Board({ plankaUrl, onAuthLost }) {
   const [actionError, setActionError] = useState(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [datesCard, setDatesCard] = useState(null);
+  const [gorevEkleOpen, setGorevEkleOpen] = useState(false);
+
+  /* Varsayılı listeden eksikler (İptal Edildi gibi) — pano açılışında sorgu. */
+  const [eksikListeSonuc, setEksikListeSonuc] = useState(null);
+
+  useEffect(() => {
+    if (!data) return;
+    let iptal = false;
+    api.eksikListeler(boardId).then((sonuc) => {
+      if (!iptal) setEksikListeSonuc(sonuc);
+    }).catch(() => {});
+    return () => { iptal = true; };
+  }, [data, boardId]);
 
   // Tarihe gore siralanmisken surukleme kapalidir: birakilan yerin "kacinci
-  // sira" oldugu Planka'daki pozisyona karsilik gelmez, kart yanlis yere duser.
+  // sira" oldugu Planka'daki pozisyona karşılık gelmez, kart yanlis yere duser.
   const dragDisabled = axis === 'list' && sort !== 'position';
 
   /**
-   * Zaman cizelgesinde cubuk surukleyince cagrilir.
+   * Zaman çizelgesinde cubuk surukleyince cagrilir.
    *
    * Once ekranda gosterip sonra kaydediyoruz (iyimser guncelleme): surukleme
-   * bittiginde cubuk yerine zipladiysa kotu hissettirir. Bitis tarihi ONCE
+   * bittiginde cubuk yerine zipladiysa kotu hissettirir. Bitiş tarihi ONCE
    * yazilir; sunucu baslangici Planka'daki GUNCEL bitise gore dogruladigi
    * icin sira onemli.
    */
@@ -130,6 +144,10 @@ export default function Board({ plankaUrl, onAuthLost }) {
     () => Object.fromEntries((data?.labels || []).map((label) => [label.id, label])),
     [data],
   );
+  const userById = useMemo(
+    () => Object.fromEntries((data?.users || []).map((user) => [user.id, user])),
+    [data],
+  );
 
   // Ayni kart verisi, secilen eksene gore farkli gruplanir.
   // Kategori ekseninde bir kart birden fazla sutunda gorunebilir (cok etiketliyse).
@@ -150,26 +168,66 @@ export default function Board({ plankaUrl, onAuthLost }) {
       }));
     }
 
-    return [
-      ...data.labels.map((label) => ({
-        id: label.id,
-        title: label.name || 'Isimsiz etiket',
-        color: label.color,
-        cards: sortCards(
-          data.cards.filter((card) => card.labelIds.includes(label.id)),
-          sort,
-        ),
-      })),
-      {
-        id: NO_LABEL,
-        title: 'Etiketsiz',
-        color: null,
-        cards: sortCards(
-          data.cards.filter((card) => card.labelIds.length === 0),
-          sort,
-        ),
-      },
-    ];
+    // Kategori ekseni: tum etiketler tek havuzda.
+    if (axis === 'label') {
+      return [
+        ...data.labels.map((label) => ({
+          id: label.id,
+          title: label.name || 'Isimsiz etiket',
+          color: label.color,
+          cards: sortCards(
+            data.cards.filter((card) => card.labelIds.includes(label.id)),
+            sort,
+          ),
+        })),
+        {
+          id: NO_LABEL,
+          title: 'Etiketsiz',
+          color: null,
+          cards: sortCards(
+            data.cards.filter((card) => card.labelIds.length === 0),
+            sort,
+          ),
+        },
+      ];
+    }
+
+    // Etiket turu ekseni (Ekip, Etkinlik Turu...): yalnizca o ture bagli
+    // etiketler sutun olur. Bir kart bu turde yalnizca TEK etiket tasir
+    // (tek ekip kurali), bu yuzden her kart en fazla bir sutunda gorunur.
+    if (axis.startsWith('group-')) {
+      const groupId = Number(axis.replace('group-', ''));
+      const group = (data.labelGroups || []).find((g) => g.id === groupId);
+      if (!group) return [];
+
+      const groupLabelIds = new Set(group.labelIds);
+      const groupedLabels = data.labels.filter((label) => groupLabelIds.has(label.id));
+
+      return [
+        ...groupedLabels.map((label) => ({
+          id: label.id,
+          title: label.name || 'Isimsiz etiket',
+          color: label.color,
+          cards: sortCards(
+            data.cards.filter((card) => card.labelIds.includes(label.id)),
+            sort,
+          ),
+        })),
+        {
+          id: `unassigned-${groupId}`,
+          title: 'Atanmamis',
+          color: null,
+          cards: sortCards(
+            data.cards.filter(
+              (card) => !card.labelIds.some((id) => groupLabelIds.has(id)),
+            ),
+            sort,
+          ),
+        },
+      ];
+    }
+
+    return [];
   }, [data, axis, sort]);
 
   const onDragEnd = async (result) => {
@@ -206,14 +264,30 @@ export default function Board({ plankaUrl, onAuthLost }) {
         // Kategori ekseninde sutun ici siralama Planka'da saklanmaz.
         if (from === to) return;
 
+        // Etiket turu ekseni (Ekip, Etkinlik Turu...): kartin bu turdeki
+        // ONCEKI etiketi dusurulup yerine yenisi eklenir. Boylece "tek ekip"
+        // kurali korunur: bir kart ayni turde birden fazla etiket tasiyamaz.
+        const isGroupAxis = axis.startsWith('group-');
+        const groupId = isGroupAxis ? Number(axis.replace('group-', '')) : null;
+        const group = isGroupAxis
+          ? (data.labelGroups || []).find((g) => g.id === groupId)
+          : null;
+        const groupLabelIds = group ? new Set(group.labelIds) : null;
+
         setData({
           ...data,
           cards: data.cards.map((card) => {
             if (card.id !== cardId) return card;
 
-            const labelIds = card.labelIds.filter((id) => id !== from);
+            let labelIds = card.labelIds.filter((id) => id !== from);
 
-            if (to !== NO_LABEL && !labelIds.includes(to)) {
+            // Tur ekseninde: ayni turdeki diger etiketleri de temizle
+            // (tek ekip kurali — ayni anda iki "Ekip: X" olamaz).
+            if (isGroupAxis && groupLabelIds) {
+              labelIds = labelIds.filter((id) => !groupLabelIds.has(id));
+            }
+
+            if (to !== NO_LABEL && !to.startsWith('unassigned-') && !labelIds.includes(to)) {
               labelIds.push(to);
             }
 
@@ -221,12 +295,26 @@ export default function Board({ plankaUrl, onAuthLost }) {
           }),
         });
 
-        if (to !== NO_LABEL) {
+        // API cagrilari: etiket ekle + tur eksenindeki eski etiketleri kaldir
+        if (to !== NO_LABEL && !to.startsWith('unassigned-')) {
           await api.addLabel(cardId, to);
         }
 
-        if (from !== NO_LABEL) {
+        if (from !== NO_LABEL && !from.startsWith('unassigned-')) {
           await api.removeLabel(cardId, from);
+        }
+
+        // Tur ekseninde: ayni turdeki diger etiketleri de sunucudan kaldir
+        if (isGroupAxis && groupLabelIds) {
+          const currentCard = data.cards.find((card) => card.id === cardId);
+          if (currentCard) {
+            const labelsToRemove = currentCard.labelIds.filter(
+              (id) => groupLabelIds.has(id) && id !== to,
+            );
+            for (const labelId of labelsToRemove) {
+              await api.removeLabel(cardId, labelId);
+            }
+          }
         }
       }
 
@@ -238,7 +326,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
   };
 
   if (loading) {
-    return <div className="loading">Pano yukleniyor...</div>;
+    return <div className="loading">Pano yükleniyor...</div>;
   }
 
   if (error) {
@@ -246,7 +334,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
       <div className="container">
         <div className="alert alert-error">{error}</div>
         <Link className="btn" to="/">
-          Etkinliklere don
+          Etkinliklere dön
         </Link>
       </div>
     );
@@ -272,21 +360,28 @@ export default function Board({ plankaUrl, onAuthLost }) {
               className={`tab ${axis === 'list' ? 'active' : ''}`}
               onClick={() => setAxis('list')}
             >
-              Duruma gore
+              Duruma göre
             </button>
-            <button
-              type="button"
-              className={`tab ${axis === 'label' ? 'active' : ''}`}
-              onClick={() => setAxis('label')}
-            >
-              Kategoriye gore
-            </button>
+
+            {/* Etiket turleri (Ekip, Etkinlik Turu...) — admin'in tanimladigi
+                her tur icin dinamik bir sekme dogar. */}
+            {(data.labelGroups || []).map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className={`tab ${axis === `group-${group.id}` ? 'active' : ''}`}
+                onClick={() => setAxis(`group-${group.id}`)}
+              >
+                {group.name} gore
+              </button>
+            ))}
+
             <button
               type="button"
               className={`tab ${axis === 'timeline' ? 'active' : ''}`}
               onClick={() => setAxis('timeline')}
             >
-              Zaman cizelgesi
+              Zaman çizelgesi
             </button>
           </div>
 
@@ -307,7 +402,11 @@ export default function Board({ plankaUrl, onAuthLost }) {
           )}
 
           <button type="button" className="btn" onClick={() => setSaveOpen(true)}>
-            Sablon olarak kaydet
+            Şablon olarak kaydet
+          </button>
+
+          <button type="button" className="btn btn-primary" onClick={() => setGorevEkle(true)}>
+            Görev ekle
           </button>
 
           <a
@@ -316,7 +415,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
             target="_blank"
             rel="noreferrer"
           >
-            Planka'da ac
+            Planka'da aç
           </a>
         </div>
       </div>
@@ -334,15 +433,41 @@ export default function Board({ plankaUrl, onAuthLost }) {
 
       {axis !== 'timeline' && dragDisabled && (
         <div className="alert alert-info">
-          Tarihe gore siralanmisken kart surukleme kapalidir &mdash; birakilan yer Planka'daki
-          siraya karsilik gelmez. Sirayi degistirmek icin &ldquo;Pano sirasi&rdquo;na donun.
+          Tarihe göre sıralanmışken kart sürükleme kapalıdır &mdash; bırakılan yer Planka'daki
+          sıraya karşılık gelmez. Sırayı değiştirmek için &ldquo;Pano sırası&rdquo;na dönün.
+        </div>
+      )}
+
+      {eksikListeSonuc?.eksik?.length > 0 && (
+        <div className="alert alert-info">
+          Bu panoda varsayılan listeden eksikler: <strong>{eksikListeSonuc.eksik.join(', ')}</strong>.
+          <button
+            type="button"
+            className="linklike"
+            style={{ marginLeft: 8 }}
+            onClick={async () => {
+              await api.varsayilanListeler(boardId);
+              const yeniden = await api.eksikListeler(boardId);
+              setEksikListeSonuc(yeniden);
+              await reload({ silent: true });
+            }}
+          >
+            Eksikleri ekle
+          </button>
         </div>
       )}
 
       {axis === 'label' && data.labels.length === 0 && (
         <div className="alert alert-info">
-          Bu panoda henuz etiket yok. Planka'da etiket olusturun (orn. Yiyecek, Icecek, Teknik);
-          burada kategori sutunlari olarak gorunecekler.
+          Bu panoda henüz etiket yok. Planka'da etiket olusturun (orn. Yiyecek, Icecek, Teknik);
+          burada kategori sutunlari olarak görünecekler.
+        </div>
+      )}
+
+      {axis.startsWith('group-') && (
+        <div className="alert alert-info">
+          Bu gorunumde bir kart yalnizca TEK etiket tasir (tek ekip / tek tur kurali).
+          Karti baska bir sutuna suruklediginizde eski etiketi otomatik olarak kaldirilir.
         </div>
       )}
 
@@ -353,7 +478,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
             {columns.map((column) => (
               <div className="column" key={column.id}>
                 <div className="column-head">
-                  {axis === 'label' && (
+                  {(axis === 'label' || axis.startsWith('group-')) && (
                     <span
                       className="column-swatch"
                       style={{ background: column.color ? colorOf(column.color) : 'var(--border)' }}
@@ -390,7 +515,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
                                   target="_blank"
                                   rel="noreferrer"
                                   style={{ color: 'inherit' }}
-                                  title="Karti Planka'da ac"
+                                  title="Kartı Planka'da aç"
                                 >
                                   {card.name}
                                 </a>
@@ -421,6 +546,27 @@ export default function Board({ plankaUrl, onAuthLost }) {
                                   </span>
                                 )}
 
+                                {/* Atanan kisiler — Planka'daki uye atamalari. */}
+                                {card.memberUserIds.map((userId) => {
+                                  const user = userById[userId];
+                                  if (!user) return null;
+                                  const initials = (user.name || user.username || '')
+                                    .trim()
+                                    .split(/\s+/)
+                                    .slice(0, 2)
+                                    .map((p) => p[0]?.toLocaleUpperCase('tr-TR') || '')
+                                    .join('');
+                                  return (
+                                    <span
+                                      key={userId}
+                                      className="chip chip-avatar"
+                                      title={user.name || user.username}
+                                    >
+                                      {initials || '?'}
+                                    </span>
+                                  );
+                                })}
+
                                 {/* Tarih rozeti ayni zamanda duzenleme girisidir:
                                     tarihsiz kartlara da buradan tarih verilir. */}
                                 {card.dueDate || card.startDate ? (
@@ -428,7 +574,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
                                     type="button"
                                     className="chip chip-outline chip-button"
                                     onClick={() => setDatesCard(card)}
-                                    title="Tarihleri duzenle"
+                                    title="Tarihleri düzenle"
                                   >
                                     {card.startDate ? `${formatDate(card.startDate)} → ` : ''}
                                     {card.dueDate ? formatDate(card.dueDate) : 'bitis yok'}
@@ -465,13 +611,24 @@ export default function Board({ plankaUrl, onAuthLost }) {
         {axis === 'label' &&
           'Kartlari surukleyerek kategorisini (etiketini) degistirebilirsiniz. Bir kart birden fazla etikete sahipse birden fazla sutunda gorunur; sutun ici siralama bu gorunumde saklanmaz.'}
         {axis === 'timeline' &&
-          'Cubugun sol ucu baslangic, sag ucu bitis tarihidir. Bitis tarihi Planka’da, baslangic tarihi companion’da saklanir.'}
+          'Cubugun sol ucu baslangic, sag ucu bitis tarihidir. Bitiş tarihi Planka’da, baslangic tarihi companion’da saklanir.'}
       </p>
 
       {saveOpen && (
         <SaveTemplateModal
           board={data.board}
           onClose={() => setSaveOpen(false)}
+        />
+      )}
+
+      {gorevEkleOpen && (
+        <AddTaskModal
+          board={data}
+          onClose={() => setGorevEkleOpen(false)}
+          onSaved={async () => {
+            setGorevEkleOpen(false);
+            await reload({ silent: true });
+          }}
         />
       )}
 
@@ -491,7 +648,7 @@ export default function Board({ plankaUrl, onAuthLost }) {
 }
 
 /**
- * Kartin tarihlerini duzenler.
+ * Kartin tarihlerini düzenler.
  *
  * Iki tarih iki ayri yerde yasar ve bu bilincli bir ayrimdir:
  *   - BITIS  -> Planka'nin kendi alani (kartta, bildirimlerde, filtrelerde gorunur),
@@ -512,7 +669,7 @@ function CardDatesModal({ card, boardId, onClose, onSaved }) {
     event.preventDefault();
 
     if (startDate && dueDate && startDate > dueDate) {
-      setError('Baslangic tarihi bitis tarihinden sonra olamaz.');
+      setError('Başlangıç tarihi bitis tarihinden sonra olamaz.');
       return;
     }
 
@@ -541,7 +698,7 @@ function CardDatesModal({ card, boardId, onClose, onSaved }) {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="field">
-          <label htmlFor="card-start">Baslangic tarihi</label>
+          <label htmlFor="card-start">Başlangıç tarihi</label>
           <input
             id="card-start"
             type="date"
@@ -551,12 +708,12 @@ function CardDatesModal({ card, boardId, onClose, onSaved }) {
           />
           <span className="muted small">
             Planka'da bu alan yok; companion'da saklanir ve zaman cizelgesinde cubugun sol
-            ucunu belirler. Bos birakirsaniz kart cizelgede tek bir isaret olarak gorunur.
+            ucunu belirler. Boş bırakırsanız kart çizelgede tek bir işaret olarak gorunur.
           </span>
         </div>
 
         <div className="field">
-          <label htmlFor="card-due">Bitis tarihi</label>
+          <label htmlFor="card-due">Bitiş tarihi</label>
           <input
             id="card-due"
             type="date"
@@ -565,14 +722,14 @@ function CardDatesModal({ card, boardId, onClose, onSaved }) {
             onChange={(event) => setDueDate(event.target.value)}
           />
           <span className="muted small">
-            Planka'ya yazilir; kartta ve Planka'nin kendi gorunumlerinde de gorunur. Saat
-            secmek isterseniz karti Planka'da acin.
+            Planka'ya yazılır; kartta ve Planka'nin kendi görünümünde de görünür. Saat
+            secmek isterseniz karti Planka'da açin.
           </span>
         </div>
 
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onClose}>
-            Vazgec
+            Vazgeç
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? 'Kaydediliyor...' : 'Kaydet'}
@@ -607,13 +764,13 @@ function SaveTemplateModal({ board, onClose }) {
 
   if (saved) {
     return (
-      <Modal title="Sablon kaydedildi" onClose={onClose}>
+      <Modal title="Şablon kaydedildi" onClose={onClose}>
         <div className="alert alert-success">
           <strong>{saved.name}</strong> sablonu kaydedildi: {saved.stats.lists} sutun,{' '}
           {saved.stats.labels} etiket, {saved.stats.cards} kart.
         </div>
         <p className="muted small">
-          Yeni bir etkinlik acmak istediginizde Sablonlar sayfasindan bu sablonu kullanabilirsiniz.
+          Yeni bir etkinlik açmak istediğinizde Şablonlar sayfasından bu sablonu kullanabilirsiniz.
         </p>
         <div className="modal-actions">
           <button type="button" className="btn btn-primary" onClick={onClose}>
@@ -626,7 +783,7 @@ function SaveTemplateModal({ board, onClose }) {
 
   return (
     <Modal
-      title="Sablon olarak kaydet"
+      title="Şablon olarak kaydet"
       subtitle="Bu panonun sutunlari, etiketleri, kartlari ve kart ici kontrol listeleri sablon olarak saklanir. Panoda hicbir sey degismez."
       onClose={onClose}
     >
@@ -634,7 +791,7 @@ function SaveTemplateModal({ board, onClose }) {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="field">
-          <label htmlFor="tpl-name">Sablon adi</label>
+          <label htmlFor="tpl-name">Şablon adı</label>
           <input
             id="tpl-name"
             type="text"
@@ -662,7 +819,7 @@ function SaveTemplateModal({ board, onClose }) {
 
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onClose}>
-            Vazgec
+            Vazgeç
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? 'Kaydediliyor...' : 'Kaydet'}

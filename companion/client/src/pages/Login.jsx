@@ -32,10 +32,14 @@ export default function Login({ onSuccess }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <h1>
-          DOTT <span style={{ color: 'var(--accent)' }}>Kanban</span>
-        </h1>
-        <p className="sub">Planka hesabinizla giris yapin.</p>
+        {/* Marka logotipini yaz yerine göster: kullanıcı temin etti. */}
+        <img
+          src="/dott-logo.png"
+          alt="DOTT Kanban"
+          className="login-logo"
+          draggable="false"
+        />
+        <p className="sub">Planka hesabınızla giriş yapın.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -49,7 +53,7 @@ export default function Login({ onSuccess }) {
         )}
 
         <div className="field">
-          <label htmlFor="login-user">Kullanici adi veya e-posta</label>
+          <label htmlFor="login-user">Kullanıcı adı veya e-posta</label>
           <input
             id="login-user"
             type="text"
@@ -61,7 +65,7 @@ export default function Login({ onSuccess }) {
         </div>
 
         <div className="field">
-          <label htmlFor="login-pass">Sifre</label>
+          <label htmlFor="login-pass">Şifre</label>
           <input
             id="login-pass"
             type="password"
@@ -73,11 +77,12 @@ export default function Login({ onSuccess }) {
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={busy} style={{ width: '100%' }}>
-          {busy ? 'Giris yapiliyor...' : 'Giris yap'}
+          <span className="icon">login</span>
+          {busy ? 'Giriş yapılıyor...' : 'Giriş yap'}
         </button>
 
         <p className="small muted" style={{ marginTop: 16, marginBottom: 0 }}>
-          Hesabiniz yoksa toplulugun Planka yoneticisinden hesap acmasini isteyin.
+          Hesabınız yoksa topluluğun Planka yöneticisinden hesap açmasını isteyin.
         </p>
       </form>
     </div>
