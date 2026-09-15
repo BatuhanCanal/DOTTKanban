@@ -151,7 +151,12 @@ sunulmak üzere derlenir.
   yeni bir pano kurulur. Seçenekler: kartlar da oluşturulsun mu, kartlar ilk sütundan mı başlasın.
 
 Şablona **alınmayanlar** (bilerek): son tarihler, tamamlanma işaretleri, kişi atamaları,
-yorumlar ve ekler. Yeni etkinlik temiz başlar.
+yorumlar, ekler ve **kart açıklamaları**. Yeni etkinlik temiz başlar.
+
+> Kart açıklamaları neden alınmıyor? Şablonlar giriş yapmış **herkese** açıktır (topluluk
+> içi paylaşım için). Açıklama serbest metindir; şablonda saklansaydı, o panoyu Planka'da
+> göremeyen biri şablondan bir pano kurarak metni okuyabilirdi. Şablon yalnızca **yapıyı**
+> taşır: sütun, etiket ve kart adları ile kart içi kontrol listeleri.
 
 ## Tarihler ve zaman çizelgesi
 

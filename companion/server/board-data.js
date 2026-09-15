@@ -115,7 +115,11 @@ function normalizeBoard(boardResponse) {
  * projede/board'da yeniden kurulabilir. Bilerek DISARIDA birakilanlar:
  *   - son tarihler (gecmis bir etkinligin tarihi yeni etkinlikte anlamsiz),
  *   - gorev isaretleri (yeni etkinlikte her sey bastan yapilacak),
- *   - uye atamalari, yorumlar, ekler (kisiye/ana ozel veri).
+ *   - uye atamalari, yorumlar, ekler (kisiye/ana ozel veri),
+ *   - KART ACIKLAMALARI: sablonlar giris yapmis herkese aciktir, kartin
+ *     aciklamasi ise serbest metindir. Saklarsak, panosunu Planka'da
+ *     goremeyen biri sablonu kurarak o metni okuyabilirdi. Yalnizca yapi
+ *     (liste/etiket/kart adlari ve kontrol listeleri) tasinir.
  */
 function buildSnapshot(boardResponse) {
   const board = boardResponse.item;
@@ -136,7 +140,6 @@ function buildSnapshot(boardResponse) {
     .sort(byPosition)
     .map((card) => ({
       name: card.name,
-      description: card.description || null,
       type: card.type || 'project',
       listIndex: listIndexById.get(card.listId),
       labelIndexes: (cardLabelsByCardId.get(card.id) || [])

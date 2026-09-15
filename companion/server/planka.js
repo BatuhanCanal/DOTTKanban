@@ -36,7 +36,19 @@ class TermsAcceptanceRequiredError extends Error {
   }
 }
 
+/**
+ * Yol parcasi kacisi. ID'ler istekten (URL parametresi, govde) gelir; ham
+ * birlestirilirse "..%2F.." gibi bir deger Planka'da BASKA bir uca cikar
+ * (orn. etiket silme istegi board silmeye doner). Her ID buradan gecer.
+ */
+const seg = (value) => encodeURIComponent(String(value ?? ''));
+
 async function request(token, method, path, body) {
+  // Ek guvenlik agi: yeni bir uc seg() kullanmayi unutursa burada yakalanir.
+  if (!path.startsWith('/api/') || path.split('/').includes('..') || path.includes('?')) {
+    throw new PlankaError(400, { message: `Gecersiz Planka yolu: ${path}` });
+  }
+
   const headers = { Accept: 'application/json' };
 
   if (token) {
@@ -104,13 +116,13 @@ const getProjects = (token) => request(token, 'GET', '/api/projects');
  * Bir board'un TUM detayi: lists, labels, cards, cardLabels, taskLists, tasks...
  * Hem kategori gorunumu hem sablon anlik goruntusu bu tek cagriyla beslenir.
  */
-const getBoard = (token, boardId) => request(token, 'GET', `/api/boards/${boardId}`);
+const getBoard = (token, boardId) => request(token, 'GET', `/api/boards/${seg(boardId)}`);
 
 const createBoard = (token, projectId, { name, position }) =>
-  request(token, 'POST', `/api/projects/${projectId}/boards`, { name, position });
+  request(token, 'POST', `/api/projects/${seg(projectId)}/boards`, { name, position });
 
 const createList = (token, boardId, { name, position, color }) =>
-  request(token, 'POST', `/api/boards/${boardId}/lists`, {
+  request(token, 'POST', `/api/boards/${seg(boardId)}/lists`, {
     type: 'active',
     name,
     position,
@@ -118,33 +130,34 @@ const createList = (token, boardId, { name, position, color }) =>
   });
 
 const createLabel = (token, boardId, { name, position, color }) =>
-  request(token, 'POST', `/api/boards/${boardId}/labels`, { name, position, color });
+  request(token, 'POST', `/api/boards/${seg(boardId)}/labels`, { name, position, color });
 
 const createCard = (token, listId, { name, position, description, type }) =>
-  request(token, 'POST', `/api/lists/${listId}/cards`, {
+  request(token, 'POST', `/api/lists/${seg(listId)}/cards`, {
     type: type || 'project',
     name,
     position,
     ...(description ? { description } : {}),
   });
 
-const updateCard = (token, cardId, values) => request(token, 'PATCH', `/api/cards/${cardId}`, values);
+const updateCard = (token, cardId, values) =>
+  request(token, 'PATCH', `/api/cards/${seg(cardId)}`, values);
 
 const addCardLabel = (token, cardId, labelId) =>
-  request(token, 'POST', `/api/cards/${cardId}/card-labels`, { labelId });
+  request(token, 'POST', `/api/cards/${seg(cardId)}/card-labels`, { labelId });
 
 const removeCardLabel = (token, cardId, labelId) =>
-  request(token, 'DELETE', `/api/cards/${cardId}/card-labels/labelId:${labelId}`);
+  request(token, 'DELETE', `/api/cards/${seg(cardId)}/card-labels/labelId:${seg(labelId)}`);
 
 const createTaskList = (token, cardId, { name, position, showOnFrontOfCard }) =>
-  request(token, 'POST', `/api/cards/${cardId}/task-lists`, {
+  request(token, 'POST', `/api/cards/${seg(cardId)}/task-lists`, {
     name,
     position,
     ...(showOnFrontOfCard === undefined ? {} : { showOnFrontOfCard }),
   });
 
 const createTask = (token, taskListId, { name, position }) =>
-  request(token, 'POST', `/api/task-lists/${taskListId}/tasks`, { name, position });
+  request(token, 'POST', `/api/task-lists/${seg(taskListId)}/tasks`, { name, position });
 
 module.exports = {
   POSITION_GAP,

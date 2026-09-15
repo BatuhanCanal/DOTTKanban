@@ -72,9 +72,10 @@ async function replaySnapshot(token, boardId, snapshot, options) {
       const position = (nextPositionByListId.get(targetListId) || 0) + GAP;
       nextPositionByListId.set(targetListId, position);
 
+      // Aciklama bilerek tasinmaz (bkz. board-data.js/buildSnapshot). Eski
+      // kayitlarda kalmis olabilir; db.js acilista temizler, burada da yazmayiz.
       const created = await planka.createCard(token, targetListId, {
         name: card.name,
-        description: card.description,
         type: card.type,
         position,
       });

@@ -148,6 +148,50 @@ const statements = {
   deleteCardDate: db.prepare(`DELETE FROM card_dates WHERE card_id = ?`),
 };
 
+// Gecis (tek seferlik): eski sablonlarin anlik goruntusunde kart aciklamalari
+// da saklaniyordu. Sablonlar giris yapmis HERKESE acik oldugu icin, panosunu
+// Planka'da goremeyen biri sablonu kurarak o serbest metni okuyabiliyordu.
+// Artik aciklama hic saklanmiyor (bkz. board-data.js/buildSnapshot); burada
+// kayitli olanlar da temizlenir. Idempotent: temiz kayitlara dokunmaz.
+function temizleSablonAciklamalari() {
+  const rows = db.prepare(`SELECT id, snapshot FROM templates`).all();
+  const update = db.prepare(`UPDATE templates SET snapshot = ? WHERE id = ?`);
+
+  let temizlenen = 0;
+
+  for (const row of rows) {
+    let snapshot;
+
+    try {
+      snapshot = JSON.parse(row.snapshot);
+    } catch {
+      continue; // bozuk kayit: dokunma, presentTemplate zaten bos gecer
+    }
+
+    const cards = snapshot.cards || [];
+    const kirlenmis = cards.some((card) => card && 'description' in card);
+
+    if (!kirlenmis) {
+      continue;
+    }
+
+    for (const card of cards) {
+      if (card) {
+        delete card.description;
+      }
+    }
+
+    update.run(JSON.stringify(snapshot), row.id);
+    temizlenen += 1;
+  }
+
+  if (temizlenen > 0) {
+    console.log(`[companion] ${temizlenen} sablondan kart aciklamalari temizlendi.`);
+  }
+}
+
+temizleSablonAciklamalari();
+
 /** Satiri API'nin dondurdugu sekle cevirir (snapshot'tan sadece ozet bilgi verir). */
 function presentTemplate(row) {
   if (!row) {
