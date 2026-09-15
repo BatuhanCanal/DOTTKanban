@@ -1,33 +1,205 @@
-:root {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-2: #ebecf0;
-  --text: #172b4d;
-  --muted: #6b778c;
-  --border: #dfe1e6;
-  --accent: #0c66e4;
-  --accent-text: #ffffff;
-  --danger: #c9372c;
-  --shadow: 0 1px 2px rgba(9, 30, 66, 0.15);
-  --shadow-lg: 0 8px 24px rgba(9, 30, 66, 0.2);
-  --radius: 8px;
+/**
+ * DOTTKanban — MD3 iskeleti + Minecraft blok teması.
+ *
+ * İKİ KATMAN, NET AYRILMIŞ:
+ *
+ *   1) MD3 (yapı/iskelet) — neyin nerede ve ne kadar büyük olduğunu belirler:
+ *      tipografi ölçeği, boşluk ritmi, bileşen anatomisi (top app bar, kart,
+ *      sekme, diyalog, metin alanı, chip), durum katmanları (hover/focus),
+ *      erişilebilirlik kontrastı. Renk token'ları da MD3 rol adlarıyla durur
+ *      (primary, surface, outline...).
+ *
+ *   2) Minecraft (tema) — MD3 rollerinin ÜSTÜNE uygulanır: her yüzey 16x16
+ *      blok dokusuyla kaplanır, köşeler keskinleşir, yumuşak gölgeler yerini
+ *      piksel kabartmalara (bevel) bırakır, yazı tipi Minecraft'ınkidir.
+ *
+ * Yani: rol ve düzen MD3'ten gelir, görünüm Minecraft'tan.
+ *
+ * DOKULAR
+ *   Block Palette #9727'nin 6 bloğu, 16x16 PNG olarak üretildi:
+ *     scripts/blok-dokulari-uret.py  ->  client/public/textures/*.png
+ *   Resmî Minecraft dokuları Mojang'a ait olduğu için depoya konmaz; dokular
+ *   paletin kendi renklerinden deterministik olarak üretilir.
+ *
+ * ÖLÇEK
+ *   Temel: Minecraft varsayılanı — bir blok 16x16 doku pikseli, GUI ölçeği 2
+ *   ile ekranda 32 piksel. Bu temel 4 KAT büyütüldü: --blok: 128px.
+ *   (Bloklar 32px'te fazla küçük duruyordu; blok yüzü seçilemiyordu.)
+ *   Ölçek TEKTİR: buton, chip ve sekme dahil her yüzey aynı blok ölçeğini
+ *   kullanır. Tek yerden değiştirmek için aşağıdaki --blok değerini düzenleyin.
+ *
+ * HAREKET
+ *   Arka plandaki blok duvarı sağdan sola akar (blok-akisi).
+ *   İçerik yüzeyleri (kart, sütun, panel) bilerek sabit: okunurken ve
+ *   sürüklerken oynayan bir zemin dikkat dağıtır.
+ *
+
+/* --- Yazı tipi: Monocraft (Minecraft fontunun yeniden yapımı) --------------
+   SIL OFL 1.1 — lisans metni public/fonts/Monocraft-LICENSE.txt.
+   Google Fonts'a bağımlılık yok, yerelden servis edilir. */
+
+@font-face {
+  font-family: 'Monocraft';
+  src: url('/fonts/Monocraft-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1d2125;
-    --surface: #22272b;
-    --surface-2: #282e33;
-    --text: #c7d1db;
-    --muted: #8c9bab;
-    --border: #2c333a;
-    --accent: #579dff;
-    --accent-text: #1d2125;
-    --danger: #f87168;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  }
+@font-face {
+  font-family: 'Monocraft';
+  src: url('/fonts/Monocraft-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
+
+/* --- Block Palette #9727 (ham renkler) ------------------------------------
+   Asağıdaki tüm renkler bu 6 renkten türetilir. Değerler palet görselindeki
+   blok dokularından medyan alınarak ölçüldü. */
+
+:root {
+  --bp-gilded-blackstone: #2c3b4b;
+  --bp-quartz-pillar: #dddfde;
+  --bp-blackstone: #313331;
+  --bp-gold-block: #f4be2e;
+  --bp-soul-soil: #4c4039;
+  --bp-soul-sand: #514231;
+  --bp-yazi: 'Monocraft', monospace;
+
+  /* Dokular (public/textures) */
+  --doku-blackstone: url('/textures/blackstone.png');
+  --doku-gilded: url('/textures/gilded-blackstone.png');
+  --doku-quartz: url('/textures/quartz-block.png');
+  --doku-gold: url('/textures/gold-block.png');
+  --doku-soul-soil: url('/textures/soul-soil.png');
+  --doku-soul-sand: url('/textures/soul-sand.png');
+
+  /* Blok ölçeği — TEK ölçek, her yerde aynı.
+     16 doku pikseli x GUI ölçeği 2 = 32px temel alındı, 4 KAT büyütüldü.
+     Buton, chip, sekme gibi küçük öğeler dahil tüm yüzeyler bu ölçeği
+     kullanır: ayrı bir "küçük blok" yok, blok her yerde blok gibi durur. */
+  --blok: 128px;
+
+  /* --- MD3 renk rolleri: paletten türetilmiş ------------------------------ */
+
+  /* Arka plan: Blackstone'un bir tık koyusu (en alt katman) */
+  --md-sys-color-background: color-mix(in srgb, var(--bp-blackstone) 82%, black);
+  --md-sys-color-on-background: var(--bp-quartz-pillar);
+
+  /* Yüzeyler: Gilded Blackstone, Quartz Pillar'a doğru açılarak.
+     Aynı ton ailesi içinde kalır — yeni bir renk tonu uydurulmaz. */
+  --md-sys-color-surface: var(--bp-gilded-blackstone);
+  --md-sys-color-surface-variant: color-mix(
+    in srgb,
+    var(--bp-gilded-blackstone) 90%,
+    var(--bp-quartz-pillar)
+  );
+  --md-sys-color-surface-container: color-mix(
+    in srgb,
+    var(--bp-gilded-blackstone) 94%,
+    var(--bp-quartz-pillar)
+  );
+  --md-sys-color-surface-container-high: color-mix(
+    in srgb,
+    var(--bp-gilded-blackstone) 87%,
+    var(--bp-quartz-pillar)
+  );
+  --md-sys-color-on-surface: var(--bp-quartz-pillar);
+  --md-sys-color-on-surface-variant: color-mix(
+    in srgb,
+    var(--bp-quartz-pillar) 80%,
+    var(--bp-gilded-blackstone)
+  );
+
+  /* Sınır / ayraç: Soul Soil ve Soul Sand — paletin toprak tonları */
+  --md-sys-color-outline: var(--bp-soul-soil);
+  --md-sys-color-outline-variant: color-mix(
+    in srgb,
+    var(--bp-soul-sand) 70%,
+    var(--bp-gilded-blackstone)
+  );
+
+  /* Vurgu — Gold Block */
+  --md-sys-color-primary: var(--bp-gold-block);
+  --md-sys-color-on-primary: color-mix(in srgb, var(--bp-blackstone) 78%, black);
+  --md-sys-color-primary-container: color-mix(
+    in srgb,
+    var(--bp-gold-block) 26%,
+    var(--bp-blackstone)
+  );
+  --md-sys-color-on-primary-container: color-mix(
+    in srgb,
+    var(--bp-gold-block) 72%,
+    var(--bp-quartz-pillar)
+  );
+
+  /* Bağlantılar: Quartz Pillar'ın Gilded Blackstone'a koyulaşması */
+  --md-sys-color-secondary: color-mix(
+    in srgb,
+    var(--bp-quartz-pillar) 84%,
+    var(--bp-gilded-blackstone)
+  );
+
+  /* Hata: paletin dışındaki tek renk. Kırmızı bu paletten türetilemez ve
+     MD3'ün "error" rolü anlamsal olarak gerekli (gecikmiş görev, silme,
+     geçersiz giriş). Minecraft'ın GUI kırmızısı kullanılır. */
+  --md-sys-color-error: #ff5555;
+  --md-sys-color-error-container: #8c1d18;
+
+  /* --- MD3 tipografi ölçeği (Monocraft) ----------------------------------
+     Piksel fontlar küçük punto'da tıkanır; MD3 ölçeği bir kademe yukarı
+     alındı ki okunurluk korunsun. */
+  --md-sys-typescale-title-large: 700 22px/1.3 var(--font-yazi);
+  --md-sys-typescale-title-medium: 700 17px/1.35 var(--font-yazi);
+  --md-sys-typescale-title-small: 700 15px/1.4 var(--font-yazi);
+  --md-sys-typescale-body-large: 400 15px/1.65 var(--font-yazi);
+  --md-sys-typescale-body-medium: 400 14px/1.6 var(--font-yazi);
+  --md-sys-typescale-label-large: 700 14px/1.4 var(--font-yazi);
+  --md-sys-typescale-label-small: 400 11px/1.4 var(--font-yazi);
+
+  /* --- MD3 şekil rolleri: blok teması köşeleri keskinleştirir ------------ */
+  --md-shape-none: 0;
+  --md-shape-xs: 2px;
+  --md-shape-small: 2px;
+  --md-shape-medium: 3px;
+  --md-shape-large: 4px;
+  --md-shape-full: 2px; /* hap şeklinde değil: blok kenarı */
+
+  /* --- MD3 yükseklik (elevation) rolleri: piksel kabartmaya eşlenir -------
+     Minecraft arayüzünde gölge yumuşak değil, sert ve 1-2 piksellik kenar
+     farkıdır. Bu yüzden elevation "bevel" olarak uygulanır. */
+  --bevel: inset -3px -3px 0 0 rgba(0, 0, 0, 0.42), inset 3px 3px 0 0 rgba(221, 223, 222, 0.14);
+  --bevel-bakis: inset 3px 3px 0 0 rgba(0, 0, 0, 0.42), inset -3px -3px 0 0 rgba(221, 223, 222, 0.14);
+  --bevel-ince: inset -2px -2px 0 0 rgba(0, 0, 0, 0.38), inset 2px 2px 0 0 rgba(221, 223, 222, 0.12);
+  --bevel-cukur: inset 2px 2px 0 0 rgba(0, 0, 0, 0.5), inset -2px -2px 0 0 rgba(221, 223, 222, 0.1);
+  --golge-blok: 3px 3px 0 0 rgba(0, 0, 0, 0.45);
+
+  /* Uygulama değişkenleri — MD token'larına eşlenir */
+
+  /* Tema operasyonu: dogrudan yuzeyleri boyayan "yuzey" rengi, kenar ve
+     yazi golgesi token'lari. Her tema alta kendisini yazar. */
+  --font-yazi: var(--bp-yazi, 'Monocraft', monospace);
+  --yuzey: #0a0b0b;                            /* paneller: duz siyah */
+  --kenar-kart: rgba(221, 223, 222, 0.22);      /* black kart kenarı */
+  --golge-yazi: 2px 2px 0 rgba(0, 0, 0, 0.5);   /* koyu zemin uzerindeki metin golgesi */
+  --metin-ustbar: var(--bp-quartz-pillar);      /* ust bar metin rengi */
+
+  --bg: var(--md-sys-color-background);
+  --surface: var(--md-sys-color-surface);
+  --surface-2: var(--md-sys-color-surface-variant);
+  --text: var(--md-sys-color-on-surface);
+  --muted: var(--md-sys-color-on-surface-variant);
+  --border: var(--md-sys-color-outline);
+  --accent: var(--md-sys-color-primary);
+  --accent-text: var(--md-sys-color-on-primary);
+  --danger: var(--md-sys-color-error);
+  --shadow: var(--bevel-ince);
+  --shadow-lg: var(--bevel);
+  --radius: var(--md-shape-small);
+}
+
+/* --- Temel: her yüzey dokulu --------------------------------------------- */
 
 * {
   box-sizing: border-box;
@@ -35,16 +207,86 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  font: var(--md-sys-typescale-body-large);
+  /* Taban renk burada; doku ayrı katmanda (aşağıda) çünkü hareket edecek. */
+  background-color: var(--bg);
 }
 
+/**
+ * Arka plan dokusu — sağdan sola akan blok duvarı.
+ *
+ * Neden ayrı katman: hareket transform ile yapılıyor, background-position ile
+ * değil. Transform GPU'da birleştirilir; background-position animasyonu her
+ * karede zemini yeniden boyar ve kaydırma sırasında takılır.
+ *
+ * Katman kenarlardan bir blok taşıyor (inset: -1 blok): bir blok boyu sola
+ * kaydığında kenarda boşluk açılmaz, döngü kesintisiz görünür.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: calc(-1 * var(--blok));
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  animation: blok-akisi 9s linear infinite;
+}
+
+/* Sağdan sola: negatif X yönü. Tam bir blok boyu kayar, sonra basa döner
+   (doku döşemesi blok ölçeğinde tekrarladığı için dikiş görünmez). */
+@keyframes blok-akisi {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--blok)));
+  }
+}
+
+/* İçerik sağdan sola kayarak girer (sayfa/panel açılışı). */
+@keyframes sagdan-giris {
+  from {
+    transform: translateX(56px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Açılışta sağdan sola giren yüzeyler.
+   Kurulum (backwards) yalnızca animasyon süresince uygulanır: bitince öğe
+   normal hâline döner, böylece kartın sürükleme döndürmesi (rotate) gibi
+   kendi transform'ları ezilmez. */
+.panel,
+.login-card,
+.tl-scroll {
+  animation: sagdan-giris 0.42s cubic-bezier(0.2, 0, 0, 1) backwards;
+}
+
+/* --- Dokular: HER YERDE keskin piksel ------------------------------------
+   image-rendering KALITIMLI bir ozelliktir: kok ogede bir kez tanimlamak tum
+   alt ogeleri kapsar. Onceki surumde tek tek secici listesi vardi ve listede
+   olmayan ogeler (sutun basligi, gantt basligi, avatarlar, zoom dugmeleri,
+   kaydirma cubugu, sekme oluðu...) bulanik kaliyordu — dokular 128px'e
+   buyutuldugu icin bu fark goze batiyordu.
+
+   'pixelated' tarayicinin yumusak (bilinear) buyutmesini kapatir: 16x16 doku
+   128px'e cikarilirken pikseller kare kalir, aradaki ara renkler uretilmez. */
+html[data-theme='minecraft'] {
+  image-rendering: pixelated;
+}
+
+/* Metin her zaman dokunun üstünde kalsın */
 a {
-  color: var(--accent);
+  color: var(--md-sys-color-secondary);
   text-decoration: none;
 }
 
@@ -56,17 +298,37 @@ h1,
 h2,
 h3 {
   margin: 0;
-  line-height: 1.25;
+  line-height: 1.3;
+  font-weight: 700;
+  /* Piksel fontların altına Minecraft usulü sert gölge */
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* --- Ust bar --------------------------------------------------------------- */
+h1 {
+  font-size: 22px;
+}
+
+h2 {
+  font-size: 17px;
+}
+
+h3 {
+  font-size: 15px;
+}
+
+/* --- Üst bar (MD3 Top App Bar) — Blackstone dokusu ------------------------ */
 
 .topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background-color: var(--bp-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  border-bottom: 4px solid var(--bp-soul-sand);
   position: sticky;
   top: 0;
   z-index: 20;
+  box-shadow: 0 4px 0 0 rgba(0, 0, 0, 0.4);
 }
 
 .topbar-inner {
@@ -75,15 +337,15 @@ h3 {
   gap: 16px;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 10px 20px;
+  padding: 12px 20px;
 }
 
 .brand {
   font-weight: 700;
-  font-size: 16px;
-  color: var(--text);
-  letter-spacing: -0.2px;
+  font-size: 20px;
+  color: var(--metin-ustbar);
   white-space: nowrap;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
 }
 
 .brand:hover {
@@ -91,29 +353,39 @@ h3 {
 }
 
 .brand span {
-  color: var(--accent);
+  color: var(--bp-gold-block);
 }
 
 .topbar nav {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .topbar nav a {
-  color: var(--muted);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-weight: 500;
+  color: var(--bp-quartz-pillar);
+  padding: 7px 14px;
+  font: var(--md-sys-typescale-label-large);
+  border: 2px solid transparent;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .topbar nav a:hover {
-  background: var(--surface-2);
+  background-color: rgba(0, 0, 0, 0.35);
+  border-color: var(--bp-soul-soil);
   text-decoration: none;
 }
 
+/* Seçili sekme: altın bloğa basılmış gibi */
 .topbar nav a.active {
-  color: var(--text);
-  background: var(--surface-2);
+  color: var(--md-sys-color-on-primary);
+  background-color: var(--bp-gold-block);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)),
+    var(--doku-gold);
+  background-size: auto, var(--blok) var(--blok);
+  border-color: color-mix(in srgb, var(--bp-gold-block) 60%, black);
+  box-shadow: var(--bevel-ince);
+  text-shadow: none;
 }
 
 .spacer {
@@ -121,12 +393,13 @@ h3 {
 }
 
 .user-chip {
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-label-small);
   white-space: nowrap;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* --- Genel yerlesim -------------------------------------------------------- */
+/* --- Genel yerleşim (MD3 boşluk ritmi: 20px kenar, 8px merdiven) ---------- */
 
 .container {
   max-width: 1400px;
@@ -142,14 +415,11 @@ h3 {
   margin-bottom: 20px;
 }
 
-.page-head h1 {
-  font-size: 22px;
-}
-
 .crumb {
   color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 2px;
+  font: var(--md-sys-typescale-label-small);
+  margin-bottom: 4px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .muted {
@@ -157,66 +427,127 @@ h3 {
 }
 
 .small {
-  font-size: 12px;
+  font: var(--md-sys-typescale-label-small);
 }
 
-/* --- Butonlar -------------------------------------------------------------- */
+/* --- Butonlar (MD3 Button anatomisi + blok yüzeyi) ------------------------
+   MD3'ten alınanlar: dolgu ölçüsü (8x16), etiket ölçeği, durum katmanı
+   (hover), odak halkası, devre dışı davranışı.
+   Minecraft'tan gelenler: blok dokusu, keskin köşe, kabartma, sert gölge. */
 
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  padding: 7px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  gap: 8px;
+  border: 2px solid var(--bp-soul-sand);
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  padding: 8px 16px;
+  border-radius: var(--md-shape-small);
+  font: var(--md-sys-typescale-label-large);
   cursor: pointer;
-  font-family: inherit;
   white-space: nowrap;
+  box-shadow: var(--bevel-ince);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55);
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--surface-2);
+  /* MD3 durum katmanı: yüzeyi aydınlat, dokuyu koru */
+  filter: brightness(1.18);
   text-decoration: none;
 }
 
+.btn:active:not(:disabled) {
+  /* Basılı hâl: kabartma içeri çöker (Minecraft butonu basılınca böyle olur) */
+  box-shadow: var(--bevel-bakis);
+  transform: translate(1px, 1px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--bp-gold-block);
+  outline-offset: 2px;
+}
+
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
+/* Birincil buton: Gold Block dokusu */
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  background-color: var(--bp-gold-block);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)),
+    var(--doku-gold);
+  background-size: auto, var(--blok) var(--blok);
+  border-color: color-mix(in srgb, var(--bp-gold-block) 62%, black);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--bevel-ince);
+  text-shadow: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.08);
+  filter: brightness(1.12);
 }
 
+/* Yıkıcı işlem: kiremit kırmızısı, dokusuz (metin okunur kalsın) */
 .btn-danger {
-  color: var(--danger);
-  border-color: transparent;
-  background: transparent;
+  color: var(--md-sys-color-error);
+  border-color: color-mix(in srgb, var(--md-sys-color-error) 45%, black);
+  background-color: rgba(0, 0, 0, 0.35);
+  background-image: none;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: rgba(255, 85, 85, 0.16);
+  filter: none;
 }
 
 .btn-sm {
-  padding: 4px 10px;
+  padding: 6px 12px;
   font-size: 12px;
+  gap: 6px;
+  border-width: 2px;
 }
 
-/* --- Kartlar / listeler ---------------------------------------------------- */
+/* --- Material Symbols ikon katmanı (MD3 ikonografisi) --------------------- */
+
+.icon {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+  text-shadow: none;
+}
+
+.icon-sm {
+  font-size: 16px;
+}
+
+/* --- Panel (MD3 Card) — Blackstone dokulu --------------------------------- */
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background-color: var(--bp-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  border: 3px solid var(--bp-soul-sand);
+  border-radius: var(--md-shape-small);
+  box-shadow: var(--bevel-ince), var(--golge-blok);
 }
 
 .panel + .panel {
@@ -228,19 +559,26 @@ h3 {
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  /* Başlık şeridi: Gilded Blackstone dokusu ile ayrılır */
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  border-bottom: 3px solid var(--bp-soul-sand);
 }
 
 .panel-head h2 {
   font-size: 15px;
 }
 
+/* Satır (MD3 List Item) — hover'da durum katmanı */
 .row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.35);
 }
 
 .row:last-child {
@@ -248,7 +586,7 @@ h3 {
 }
 
 .row:hover {
-  background: var(--surface-2);
+  background-color: rgba(221, 223, 222, 0.06);
 }
 
 .row-main {
@@ -257,7 +595,8 @@ h3 {
 }
 
 .row-title {
-  font-weight: 500;
+  font-weight: 700;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .empty {
@@ -266,35 +605,52 @@ h3 {
   color: var(--muted);
 }
 
-/* --- Eksen sekmeleri ------------------------------------------------------- */
+/* --- Sekmeler (MD3 Tabs) — Soul Soil oluğunda Gold Block ------------------ */
 
 .tabs {
   display: inline-flex;
   gap: 2px;
-  background: var(--surface-2);
   padding: 3px;
-  border-radius: 8px;
+  background-color: var(--bp-soul-sand);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)),
+    var(--doku-soul-sand);
+  background-size: auto, var(--blok) var(--blok);
+  border: 2px solid color-mix(in srgb, var(--bp-soul-sand) 60%, black);
+  border-radius: var(--md-shape-small);
 }
 
 .tab {
-  border: none;
+  border: 2px solid transparent;
   background: transparent;
-  color: var(--muted);
-  padding: 6px 14px;
-  border-radius: 6px;
+  color: color-mix(in srgb, var(--bp-quartz-pillar) 80%, var(--bp-soul-sand));
+  padding: 7px 14px;
+  border-radius: var(--md-shape-xs);
+  font: var(--md-sys-typescale-label-large);
   font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
-  font-family: inherit;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
+.tab:hover {
+  color: var(--bp-quartz-pillar);
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Aktif sekme: altın blok, kabartmalı */
 .tab.active {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
+  color: var(--md-sys-color-on-primary);
+  background-color: var(--bp-gold-block);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)),
+    var(--doku-gold);
+  background-size: auto, var(--blok) var(--blok);
+  border-color: color-mix(in srgb, var(--bp-gold-block) 60%, black);
+  box-shadow: var(--bevel-ince);
+  text-shadow: none;
 }
 
-/* --- Kanban ---------------------------------------------------------------- */
+/* --- Kanban (MD3 düzeni + blok yüzeyleri) --------------------------------- */
 
 .board-scroll {
   overflow-x: auto;
@@ -308,9 +664,16 @@ h3 {
   min-height: 200px;
 }
 
+/* Sütun: Soul Sand zemin uzerinde çukur bir oluk gibi */
 .column {
-  background: var(--surface-2);
-  border-radius: var(--radius);
+  background-color: color-mix(in srgb, var(--bp-soul-sand) 70%, black);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)),
+    var(--doku-soul-sand);
+  background-size: auto, var(--blok) var(--blok);
+  border: 3px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-small);
+  box-shadow: var(--bevel-cukur);
   width: 290px;
   min-width: 290px;
   display: flex;
@@ -318,89 +681,111 @@ h3 {
   max-height: calc(100vh - 260px);
 }
 
+/* Sütun başlığı: Quartz Pillar dokusu — açık taş başlık, koyu metin.
+   Quartz sadece iki yerde görünüyordu ve örtü yüzünden görünmez oluyordu;
+   burada ve gantt başlığında artık doku görünüyor. */
 .column-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px 8px;
+  padding: 9px 11px;
+  background-color: color-mix(in srgb, var(--bp-quartz-pillar) 68%, var(--bp-soul-sand));
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)),
+    var(--doku-quartz);
+  background-size: auto, var(--blok) var(--blok);
+  border-bottom: 3px solid var(--bp-soul-soil);
 }
 
 .column-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.5);
   flex: none;
 }
 
 .column-title {
-  font-weight: 600;
+  font: var(--md-sys-typescale-label-large);
   font-size: 13px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
+  text-shadow: 1px 1px 0 rgba(221, 223, 222, 0.45);
 }
 
 .column-count {
-  color: var(--muted);
-  font-size: 12px;
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 0 8px;
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
+  font: var(--md-sys-typescale-label-small);
+  background-color: rgba(0, 0, 0, 0.16);
+  border: 2px solid rgba(0, 0, 0, 0.28);
+  padding: 1px 7px;
+  text-shadow: none;
 }
 
 .column-body {
-  padding: 0 8px 8px;
+  padding: 8px;
   overflow-y: auto;
   flex: 1;
   min-height: 20px;
 }
 
+/* Bırakma hedefi: içeri çökmüş aydınlık oluk */
 .column-body.dragging-over {
-  background: rgba(12, 102, 228, 0.08);
-  border-radius: 6px;
+  background-color: rgba(244, 190, 46, 0.1);
+  box-shadow: inset 0 0 0 3px var(--bp-gold-block);
 }
 
+/* Kanban kartı: Gilded Blackstone dokusu + kabartma */
 .kanban-card {
-  background: var(--surface);
-  border-radius: 6px;
-  box-shadow: var(--shadow);
-  padding: 10px 12px;
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  border: 2px solid color-mix(in srgb, var(--bp-gilded-blackstone) 55%, black);
+  border-radius: var(--md-shape-xs);
+  box-shadow: var(--bevel-ince), 2px 2px 0 0 rgba(0, 0, 0, 0.35);
+  padding: 9px 11px;
   margin-bottom: 8px;
   cursor: grab;
-  border: 1px solid transparent;
 }
 
 .kanban-card:hover {
-  border-color: var(--accent);
+  border-color: var(--bp-gold-block);
+  filter: brightness(1.12);
 }
 
 .kanban-card.is-dragging {
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--bevel-ince), 6px 6px 0 0 rgba(0, 0, 0, 0.5);
   transform: rotate(1.5deg);
 }
 
 .kanban-card-title {
-  font-size: 13px;
-  margin-bottom: 6px;
+  font: var(--md-sys-typescale-body-medium);
+  margin-bottom: 7px;
   word-break: break-word;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .kanban-card-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
 }
 
+/* --- Chip'ler (MD3 Chip + blok kenarı) ------------------------------------ */
+
 .chip {
   display: inline-block;
-  font-size: 11px;
-  padding: 1px 8px;
-  border-radius: 10px;
+  font: var(--md-sys-typescale-label-small);
+  padding: 2px 8px;
+  border: 2px solid rgba(0, 0, 0, 0.45);
   color: #fff;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -408,31 +793,47 @@ h3 {
 }
 
 .chip-outline {
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  text-shadow: none;
+  color: var(--bp-quartz-pillar);
+  background-color: rgba(0, 0, 0, 0.4);
+  border-color: var(--bp-soul-soil);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .chip-status {
-  color: var(--muted);
-  background: var(--surface-2);
-  text-shadow: none;
-  border: 1px solid var(--border);
+  color: var(--bp-quartz-pillar);
+  background-color: color-mix(in srgb, var(--bp-quartz-pillar) 14%, black);
+  border-color: var(--bp-soul-soil);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
-/* --- Formlar / modal ------------------------------------------------------- */
+/* Atanan kişi: altın tonlu kutu (Minecraft'ta oyuncu adı böyle vurgulanır) */
+.chip-avatar {
+  background-color: var(--bp-gold-block);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)),
+    var(--doku-gold);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--md-sys-color-on-primary);
+  border-color: color-mix(in srgb, var(--bp-gold-block) 60%, black);
+  text-shadow: none;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+/* --- Formlar (MD3 Text Field) — doku içeri çökmüş olukta ------------------ */
 
 .field {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .field label {
   display: block;
-  font-size: 12px;
-  font-weight: 600;
+  font: var(--md-sys-typescale-label-small);
+  font-weight: 700;
   color: var(--muted);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
 
 .field input[type='text'],
@@ -441,28 +842,35 @@ h3 {
 .field textarea,
 .field select {
   width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
+  padding: 10px 12px;
+  border: 3px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  background-color: color-mix(in srgb, var(--bp-blackstone) 78%, black);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.62)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-body-medium);
+  box-shadow: var(--bevel-cukur);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: color-mix(in srgb, var(--bp-quartz-pillar) 45%, black);
 }
 
 .field input:focus,
 .field textarea:focus,
 .field select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: transparent;
+  outline: none;
+  border-color: var(--bp-gold-block);
+  box-shadow: var(--bevel-cukur), 0 0 0 2px rgba(244, 190, 46, 0.35);
 }
 
-/* Alan altindaki aciklama satiri (orn. tarih alanlarinda hangi tarihin nerede
-   saklandigi): girdinin yanina degil altina aksin. */
 .field > .muted {
   display: block;
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 .field-check {
@@ -474,16 +882,20 @@ h3 {
 
 .field-check input {
   margin-top: 3px;
+  accent-color: var(--bp-gold-block);
 }
 
 .field-check span {
+  font: var(--md-sys-typescale-body-medium);
   font-size: 13px;
 }
+
+/* --- Modal (MD3 Dialog) — Soul Soil çerçeve, Blackstone gövde ------------- */
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(9, 30, 66, 0.54);
+  background-color: rgba(0, 0, 0, 0.72);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -493,60 +905,80 @@ h3 {
 }
 
 .modal {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+  background-color: var(--bp-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  border: 4px solid var(--bp-soul-soil);
+  outline: 3px solid color-mix(in srgb, var(--bp-soul-soil) 55%, black);
+  border-radius: var(--md-shape-small);
+  box-shadow: 8px 8px 0 0 rgba(0, 0, 0, 0.55);
   width: 100%;
-  max-width: 440px;
-  padding: 20px;
+  max-width: 460px;
+  padding: 22px;
 }
 
 .modal h2 {
-  font-size: 17px;
+  font: var(--md-sys-typescale-title-medium);
   margin-bottom: 4px;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 20px;
 }
 
-/* --- Durum mesajlari ------------------------------------------------------- */
+/* --- Durum mesajları (MD3 Banner) — kalın blok çerçeveli ------------------ */
 
 .alert {
-  padding: 10px 14px;
-  border-radius: 6px;
+  padding: 12px 16px;
+  border: 3px solid;
+  border-radius: var(--md-shape-xs);
   margin-bottom: 16px;
+  font: var(--md-sys-typescale-body-medium);
   font-size: 13px;
-  border: 1px solid transparent;
+  box-shadow: var(--bevel-ince);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55);
 }
 
 .alert-error {
-  background: rgba(201, 55, 44, 0.1);
-  border-color: rgba(201, 55, 44, 0.3);
-  color: var(--danger);
+  background-color: var(--md-sys-color-error-container);
+  border-color: var(--md-sys-color-error);
+  color: #ffd6d6;
 }
 
 .alert-success {
-  background: rgba(30, 138, 79, 0.1);
-  border-color: rgba(30, 138, 79, 0.3);
+  background-color: #1e4620;
+  border-color: #5a9e5c;
+  color: #d8f3d9;
 }
 
 .alert-info {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--muted);
+  background-color: color-mix(in srgb, var(--bp-gilded-blackstone) 75%, black);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  border-color: var(--bp-soul-soil);
+  color: var(--bp-quartz-pillar);
 }
 
 .loading {
   padding: 60px 0;
   text-align: center;
   color: var(--muted);
+  font: var(--md-sys-typescale-title-small);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* --- Giris ekrani ---------------------------------------------------------- */
+/* --- Giriş ekranı... — Quartz Pillar paneli --------------------------------
+   ... (yorumun başı değişmedi)
+   Kamera yüzeyi artık transparent: body::before'daki ALTIINLI SIYAH
+   (Gilded Blackstone) dokusuna gireiyormus gibi kayan arka plan
+   görünüyor; quartz kart onun üstünde durur. */
 
 .login-wrap {
   min-height: 100vh;
@@ -554,41 +986,226 @@ h3 {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  /* Kendı dokusu yok: sahte sahne see body::before animasyonda kalır. */
+  background: none;
 }
 
 .login-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  padding: 28px;
+  /* QUARTZ YUZEYİ KURALLARI — bu yüzdede metinler KOYU olmalı.
+
+   ORNEK TEKİL HATAYI DÜZELTTİ: aşağıdaki on-surface/variant TOKEN'ları
+   gerçekten koyudur, ama .sub gibi kurallar --muted alias'ını kullanıyor.
+   --muted ise KÖKTE tanimli: var(--md-sys-color-on-surface-variant) — ve
+   o, KÖK EGİLİNE göre çözülür (açık gri). Yani kartın onunda uzak
+   yüzey emaneti kullanılmış沂. Bu, WCAG kontrastının %1.07'e (okunmaz)
+   düşmesine sebep oluyordu.
+
+   Düzelmiş hali: koyu tonlar DOGRUDAN hex olarak girilir, ve "app var"
+   aliaslarının (--text, --muted) KART SCOPE'unda yeniden yazılır, boylece
+   var() zinciri bu elemandan çözülür. */
+  --md-sys-color-on-surface: #1d211f;
+  --md-sys-color-on-surface-variant: #2f3331;
+  --text: var(--md-sys-color-on-surface);
+  --muted: var(--md-sys-color-on-surface-variant);
+
+  background-color: var(--bp-quartz-pillar);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.18)),
+    var(--doku-quartz);
+  background-size: auto, var(--blok) var(--blok);
+  border: 6px solid var(--bp-soul-soil);
+  outline: 3px solid color-mix(in srgb, var(--bp-soul-soil) 55%, black);
+  border-radius: var(--md-shape-medium);
+  box-shadow: 10px 10px 0 0 rgba(0, 0, 0, 0.55);
+  padding: 48px 44px;
   width: 100%;
-  max-width: 380px;
+  max-width: 580px;
 }
 
 .login-card h1 {
-  font-size: 20px;
-  margin-bottom: 4px;
+  font: var(--md-sys-typescale-title-large);
+  font-size: 30px;
+  margin-bottom: 10px;
+  /* Koyu metin açık doku üzerinde: hafif beyaz isaret (Minecraft tarzi) */
+  text-shadow: 2px 2px 0 rgba(221, 223, 222, 0.55);
 }
 
 .login-card .sub {
-  color: var(--muted);
-  font-size: 13px;
+  color: #2f3331;
+  font-size: 16px;
+  margin-bottom: 26px;
+  text-shadow: none;
+}
+
+/* Marka logosu: kullanıcının sağladığı blok harflı logo (beyaz zemin
+   şeffaflıstırıldı). Quartz kartın üstünde görünsün; iki kart dokusunun
+   karışınca kaybolmasın diye altı beyaz-zemin yerine filtresiz siyah değil,
+   hafif kabartmacs çucuru ile koyunken ayrışır. */
+.login-logo {
+  display: block;
+  margin: 0 auto 24px;
+  width: 86%;
+  max-width: 480px;
+  height: auto;
+  image-rendering: auto;   /* logo pikseli degil, smooth ölçekle olsun */
+  /* İki katman gölge: sert (Minecraft usulu) + mushak (derinlik). Acik gri
+     harflerin quartz dokusuna gozle kaybolmasini engeliyor. */
+  filter:
+    drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55))
+    drop-shadow(0 4px 7px rgba(0, 0, 0, 0.4));
+}
+
+/* ==========================================================================
+   PANELLER — FULL SIYAH (doku yok)
+   Kullanıcı istegi: dokulu yuzeyler beyaz metni boğuyordu; kontrast yetişi
+   olmadı. Panolarda / kartlarda / sütunlarda DIK metin zemini siyah,
+   dokular yalnızca ARKA PLAN (altınlı siyah, Gilded Blackstone) ve
+   Quartz başlıklarda kalıyor. Böylece beyaz metin siyaha karşı
+   18:1 civarı kontrast serialVersionUID deişiyor.
+
+   bu yüzdün seçici grubunu dosyanın SONUNA koyuyorum: aynı spesifiklik
+   diğer kurallarla eşit, ama SONRA geldiği için onları geçiyor. */
+
+.topbar,
+.panel,
+.panel-head,
+.kanban-card,
+.column,
+.modal,
+.tl-scroll,
+.tl-label {
+  background-color: var(--yuzey);
+  background-image: none;
+}
+
+/* Siyah kartın siyah sütunda kaybolmaması icin kenarını açık yaptım. */
+.kanban-card {
+  border-color: var(--kenar-kart);
+}
+
+.kanban-card:hover {
+  border-color: var(--bp-gold-block);
+}
+
+/* Büyük caris için alanları da büyüt: girdiler ve buton MD3'ün
+   minimum dokünülmüs hali yerine rahat davetlu boyutlara gelir. */
+.login-card .field {
   margin-bottom: 22px;
 }
 
-/* --- Zaman cizelgesi (Gantt benzeri gorunum) ------------------------------
-   Yapi: yatay kaydirilan bir kutu icinde satirlar. Her satirin solunda
-   "sticky" bir gorev adi sutunu, sagda gun olceginde bir izleme alani var.
-   Arka plan izgarasi ve "bugun" cizgisi, tum satirlarin boyunca uzanabilmek
-   icin mutlak konumlu ayri katmanlardir. */
+.login-card .field label {
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: #1d201f;
+  text-shadow: none;
+}
+
+.login-card .field input {
+  padding: 14px 15px;
+  font-size: 16px;
+}
+
+.login-card .btn {
+  padding: 14px 20px;
+  font-size: 16px;
+}
+
+.login-card .small {
+  font-size: 12px;
+}
+
+/* --- Etiket türleri yönetim sayfası (MD3 liste + chip) -------------------- */
+
+.label-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 18px;
+}
+
+.label-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 2px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  font: var(--md-sys-typescale-label-small);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.label-swatch {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+  flex: none;
+}
+
+.label-name {
+  font-weight: 700;
+}
+
+.label-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Seçilebilir etiket satırı: basılı blok görünümü */
+.label-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 3px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-body-medium);
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--bevel-ince);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.label-pick:hover:not(:disabled) {
+  border-color: var(--bp-gold-block);
+  filter: brightness(1.15);
+}
+
+.label-pick:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Zaten bağlı: altın çerçeve + içeri çökmüş */
+.label-pick.is-assigned {
+  border-color: var(--bp-gold-block);
+  box-shadow: var(--bevel-cukur), 0 0 0 2px rgba(244, 190, 46, 0.25);
+}
+
+/* --- Zaman çizelgesi (Gantt) ----------------------------------------------
+   MD3 iskeleti korunur: sticky sol etiket sütunu, sticky ay başlığı, satır
+   yükseklikleri, ölçek merdiveni. Blok teması yüzeylere uygulanır.
+
+   Dokunun metni ezmemesi icin satır zemininde koyu bir örtü (scrim) var:
+   doku görünür kalır, ama görev adları okunur. */
 
 .tl-scroll {
   overflow-x: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background-color: var(--bp-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  border: 3px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-small);
+  box-shadow: var(--bevel-cukur);
 }
 
 .tl-inner {
@@ -596,14 +1213,19 @@ h3 {
   min-width: 100%;
 }
 
+/* Başlık şeridi: Quartz Pillar dokusu, hafif örtü ile — açık taş, koyu metin */
 .tl-head {
   display: flex;
   position: sticky;
   top: 0;
   z-index: 5;
-  height: 40px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  height: 42px;
+  background-color: color-mix(in srgb, var(--bp-quartz-pillar) 64%, var(--bp-soul-sand));
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
+    var(--doku-quartz);
+  background-size: auto, var(--blok) var(--blok);
+  border-bottom: 3px solid var(--bp-soul-soil);
 }
 
 .tl-label {
@@ -614,9 +1236,10 @@ h3 {
   z-index: 4;
   display: flex;
   align-items: center;
+  gap: 6px;
   padding: 0 10px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--bp-blackstone) 88%, black);
+  border-right: 3px solid var(--bp-soul-soil);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -629,12 +1252,14 @@ h3 {
   white-space: nowrap;
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 12px;
 }
 
 .tl-head-label {
-  font-weight: 600;
-  color: var(--muted);
+  font: var(--md-sys-typescale-label-large);
   font-size: 12px;
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
+  text-shadow: 1px 1px 0 rgba(221, 223, 222, 0.45);
 }
 
 .tl-track {
@@ -649,7 +1274,7 @@ h3 {
 
 .tl-months {
   display: flex;
-  height: 22px;
+  height: 23px;
   align-items: center;
 }
 
@@ -657,14 +1282,13 @@ h3 {
   flex: 0 0 auto;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  border-left: 1px solid var(--border);
+  font: var(--md-sys-typescale-label-small);
+  font-weight: 700;
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
+  border-left: 2px solid var(--bp-soul-soil);
+  text-shadow: 1px 1px 0 rgba(221, 223, 222, 0.45);
 }
 
-/* Ay adi, kaydirildiginda bandin icinde kalsin: yoksa uzun bir ayin adi
-   soldan tasip gorunmez oluyor. */
 .tl-month span {
   position: sticky;
   left: 4px;
@@ -673,21 +1297,29 @@ h3 {
 
 .tl-ticks {
   position: relative;
-  height: 18px;
+  height: 19px;
 }
 
 .tl-tick {
   position: absolute;
   top: 0;
+  font: var(--md-sys-typescale-label-small);
   font-size: 10px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
   padding-left: 2px;
 }
 
-/* Izgara ve bugun cizgisi basligin altindan baslar (baslik 40px). */
+/* Pazartesi rakamları biraz daha belirgin olsun: hafta başları eksende
+   referans noktasıdır. (JSX bu sınıfı zaten ekliyordu, stili yoktu.) */
+.tl-tick.is-week {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--bp-blackstone) 92%, black);
+}
+
+/* Arka plan ızgarası: hafta sonları Soul Sand, çizgiler Soul Soil */
 .tl-grid {
   position: absolute;
-  top: 40px;
+  top: 42px;
   bottom: 0;
   z-index: 0;
   pointer-events: none;
@@ -697,64 +1329,81 @@ h3 {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: var(--surface-2);
-  opacity: 0.6;
+  background-color: rgba(81, 66, 49, 0.3);
 }
 
 .tl-weekline {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
-  background: var(--border);
+  width: 2px;
+  background-color: rgba(76, 64, 57, 0.55);
 }
 
-.tl-today {
+.tl-monthline {
   position: absolute;
-  top: 40px;
+  top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--danger);
-  opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+/* Bugün çizgisi: kırmızı (MD3 error rolü) */
+.tl-today {
+  position: absolute;
+  top: 42px;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--md-sys-color-error);
   z-index: 2;
   pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
 .tl-today span {
   position: absolute;
   top: 0;
-  left: 3px;
-  font-size: 10px;
-  color: var(--danger);
-  background: var(--surface);
-  padding: 0 3px;
-  border-radius: 3px;
+  left: 4px;
+  font: var(--md-sys-typescale-label-small);
+  color: #fff;
+  background-color: var(--md-sys-color-error-container);
+  border: 2px solid var(--md-sys-color-error);
+  padding: 0 4px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
+/* Grup başlığı satırı: Soul Soil dokusu */
 .tl-group {
   display: flex;
-  height: 26px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  height: 28px;
+  background-color: var(--bp-soul-sand);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)),
+    var(--doku-soul-sand);
+  background-size: auto, var(--blok) var(--blok);
+  border-bottom: 2px solid var(--bp-soul-soil);
   position: relative;
 }
 
 .tl-group-label {
-  background: var(--surface-2);
-  font-size: 11px;
+  background-color: var(--bp-soul-sand);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)),
+    var(--doku-soul-sand);
+  background-size: auto, var(--blok) var(--blok);
+  font: var(--md-sys-typescale-label-small);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  letter-spacing: 0.06em;
+  color: var(--bp-quartz-pillar);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .tl-row {
   display: flex;
   align-items: stretch;
-  /* Sabit yukseklik: cubuk (top 6 + 18) satirin icinde kalmali, satirin
-     yuksekligini soldaki metin belirlememeli. */
-  height: 30px;
-  border-bottom: 1px solid var(--border);
+  height: 32px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.4);
   position: relative;
   font-size: 13px;
 }
@@ -763,236 +1412,38 @@ h3 {
   border-bottom: 0;
 }
 
-.tl-milestone {
-  position: absolute;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  color: #fff;
+/* MD3 durum katmanı: satır hover */
+.tl-row:hover,
+.tl-row:hover .tl-label {
+  background-color: rgba(221, 223, 222, 0.07);
 }
 
-/* Cubuk uzerindeki gorev adi. Yalnizca govdedeki metni hedefler: cubugun icinde
-   ilerleme dolgusu da bir span, o etkilenmemeli. */
-.tl-bar-body span {
-  display: block;
-  padding: 0 6px;
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* Etiket rengi acik da olabilir koyu da: metni okunur tutmak icin golge. */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-}
-
-.tl-milestone {
-  top: 9px;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  border-radius: 2px;
-  transform: rotate(45deg);
-  box-shadow: var(--shadow);
-}
-
-.tl-bar:hover,
-.tl-milestone:hover {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.tl-bar.is-done,
-.tl-milestone.is-done {
-  opacity: 0.45;
-}
-
-.tl-bar.is-overdue,
-.tl-milestone.is-overdue {
-  box-shadow: 0 0 0 2px var(--danger);
-}
-
-.tl-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-  margin-top: 10px;
-}
-
-.tl-swatch {
-  display: inline-block;
-  width: 22px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  vertical-align: middle;
-  margin-right: 5px;
-}
-
-.tl-swatch-diamond {
-  width: 10px;
-  transform: rotate(45deg);
-  border-radius: 2px;
-}
-
-.tl-swatch-done {
-  opacity: 0.45;
-}
-
-/* Tarih rozeti ayni zamanda tarih duzenleme dugmesidir. */
-.chip-button {
-  border: 1px dashed var(--border);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-}
-
-.chip-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* Tarihsiz kartlarda "+ tarih" dugmesi panoyu kalabaliklastirmasin: yalnizca
-   kartin uzerine gelindiginde (veya klavyeyle odaklanildiginda) belirir. */
-.chip-add-date {
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.kanban-card:hover .chip-add-date,
-.chip-add-date:focus-visible {
-  opacity: 1;
-}
-
-.sort-select {
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-
-/* --- Zaman cizelgesi: ust kontrol seridi ---------------------------------- */
-
-.tl-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.tl-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.tl-control select {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-
-.tl-check {
-  cursor: pointer;
-}
-
-.tl-check input {
-  margin: 0;
-}
-
-.tl-zoom {
-  display: flex;
-  gap: 4px;
-}
-
-.tl-zoom button {
-  min-width: 26px;
-  height: 26px;
-  padding: 0 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.tl-zoom button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.tl-zoom button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.tl-summary {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--text);
-}
-
-.tl-summary .is-overdue {
-  color: var(--danger);
-  font-weight: 600;
-}
-
-/* Metin gibi gorunen dugme (uyari kutusundaki "tamamlananlari goster"). */
-.linklike {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-/* --- Zaman cizelgesi: satir icerigi --------------------------------------- */
-
-.tl-row:hover .tl-label,
-.tl-row:hover {
-  background: var(--surface-2);
-}
-
-.tl-label {
-  gap: 6px;
-}
-
-/* Kontrol listesi ilerlemesi ve sorumlu kisiler, gorev adinin sagina sigar. */
 .tl-tasks {
   flex: 0 0 auto;
-  font-size: 11px;
+  font: var(--md-sys-typescale-label-small);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
+/* Atanan kişi avatarı: altın blok, keskin köşe (yuvarlak değil) */
 .tl-avatar {
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
+  border-radius: 0;
+  background-color: var(--bp-gold-block);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)),
+    var(--doku-gold);
+  background-size: auto, var(--blok) var(--blok);
+  border: 2px solid color-mix(in srgb, var(--bp-gold-block) 60%, black);
+  color: var(--md-sys-color-on-primary);
+  font-family: var(--font-yazi);
   font-size: 9px;
   font-weight: 700;
-  line-height: 18px;
+  line-height: 16px;
   text-align: center;
-  letter-spacing: -0.02em;
+  text-shadow: none;
 }
 
 .tl-group-title {
@@ -1003,42 +1454,33 @@ h3 {
 
 .tl-group-count {
   flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--bp-quartz-pillar);
 }
 
-.tl-monthline {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
-  opacity: 1;
-  filter: brightness(0.85);
-}
+/* --- Zaman çizelgesi: çubuk ve sürükleme --------------------------------- */
 
-/* --- Zaman cizelgesi: cubuk ve surukleme ---------------------------------- */
-
-/* Cubuk artik bir kap: icinde ilerleme dolgusu, tiklanabilir govde ve iki
-   boyutlandirma tutamagi var. */
+/* Gantt çubuğu: MD3 "dört köşe yumuşak" yerine blok kenarı, kabartmalı.
+   İnce açık kenarlık şart: etiket renkleri (deep-ocean, gun-metal, shady-rust
+   gibi) koyu olduğunda çubuk koyu zemine karışıyordu. */
 .tl-bar {
   position: absolute;
-  top: 6px;
+  top: 7px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: var(--shadow);
+  border: 1px solid rgba(221, 223, 222, 0.45);
+  box-shadow: var(--bevel-ince), 1px 1px 0 0 rgba(0, 0, 0, 0.5);
 }
 
-/* Kontrol listesinin biten orani. Koyu bolum "bu kadari yapildi" demek;
-   acik birakmak tersini cagristiriyordu. */
+/* Kontrol listesi ilerlemesi: koyu bölüm "bu kadarı yapıldı" demek */
 .tl-progress {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.26);
-  border-right: 1px solid rgba(255, 255, 255, 0.45);
+  background-color: rgba(0, 0, 0, 0.35);
+  border-right: 2px solid rgba(255, 255, 255, 0.5);
   pointer-events: none;
 }
 
@@ -1054,12 +1496,23 @@ h3 {
   font: inherit;
 }
 
+.tl-bar-body span {
+  display: block;
+  padding: 0 6px;
+  font-family: var(--font-yazi);
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
 .tl-scroll.is-dragging,
 .tl-scroll.is-dragging .tl-bar-body {
   cursor: grabbing;
 }
 
-/* Surukleme sirasinda metin secilmesin. */
 .tl-scroll.is-dragging {
   user-select: none;
 }
@@ -1068,10 +1521,10 @@ h3 {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 7px;
+  width: 8px;
   cursor: ew-resize;
   opacity: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.45);
 }
 
 .tl-handle-start {
@@ -1086,25 +1539,455 @@ h3 {
   opacity: 1;
 }
 
+/* Sürüklenen çubuk: altın odak halkası */
 .tl-bar.is-moving {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--bp-gold-block);
   outline-offset: 1px;
-  opacity: 0.85;
+  opacity: 0.9;
+}
+
+.tl-bar:hover,
+.tl-milestone:hover {
+  outline: 3px solid var(--bp-gold-block);
+  outline-offset: 1px;
+}
+
+/* Tamamlanan: soluk + içeri çökmüş (yapıldı işareti) */
+.tl-bar.is-done,
+.tl-milestone.is-done {
+  opacity: 0.45;
+  box-shadow: var(--bevel-cukur);
+}
+
+.tl-bar.is-overdue,
+.tl-milestone.is-overdue {
+  box-shadow: 0 0 0 2px var(--md-sys-color-error);
+}
+
+/* Kilometre taşı (yalnızca bitiş tarihi olan kart): elmas biçimi keskin.
+   Aynı nedenle açık kenarlık alır. */
+.tl-milestone {
+  position: absolute;
+  border: 1px solid rgba(221, 223, 222, 0.5);
+  padding: 0;
+  cursor: grab;
+  color: #fff;
+  top: 10px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 0;
+  transform: rotate(45deg);
+  box-shadow: var(--bevel-ince), 1px 1px 0 0 rgba(0, 0, 0, 0.5);
 }
 
 .tl-milestone.is-moving {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--bp-gold-block);
   outline-offset: 1px;
 }
 
-.tl-milestone {
-  cursor: grab;
+/* --- Zaman çizelgesi: araç şeridi ve özet -------------------------------- */
+
+.tl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.tl-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--md-sys-typescale-label-small);
+  color: var(--muted);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.tl-control select {
+  padding: 6px 10px;
+  border: 2px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  background-color: color-mix(in srgb, var(--bp-blackstone) 82%, black);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)),
+    var(--doku-blackstone);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-label-small);
+  font-size: 13px;
+}
+
+.tl-check {
+  cursor: pointer;
+}
+
+.tl-check input {
+  margin: 0;
+  accent-color: var(--bp-gold-block);
+}
+
+.tl-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.tl-zoom button {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 2px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-label-large);
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--bevel-ince);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.tl-zoom button:hover:not(:disabled) {
+  border-color: var(--bp-gold-block);
+  filter: brightness(1.15);
+}
+
+.tl-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+.tl-summary {
+  display: flex;
+  gap: 12px;
+  font: var(--md-sys-typescale-label-small);
+  color: var(--bp-quartz-pillar);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.tl-summary .is-overdue {
+  color: var(--md-sys-color-error);
+  font-weight: 700;
+}
+
+/* --- Zaman çizelgesi: açıklama şeridi ------------------------------------ */
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.tl-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+  border-radius: 0;
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    var(--doku-gilded);
+  background-size: var(--blok) var(--blok);
+  border: 2px solid var(--bp-soul-soil);
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.tl-swatch-diamond {
+  width: 11px;
+  transform: rotate(45deg);
+}
+
+.tl-swatch-done {
+  opacity: 0.45;
 }
 
 .tl-swatch-progress {
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--accent) 74%, black) 55%,
-    var(--accent) 55%
-  );
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.45) 55%, transparent 55%),
+    var(--doku-gilded);
+}
+
+/* --- Tarih rozeti ve sıralama seçici ------------------------------------- */
+
+.chip-button {
+  border: 2px dashed var(--bp-soul-soil);
+  background-color: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  font: var(--md-sys-typescale-label-small);
+  color: var(--bp-quartz-pillar);
+}
+
+.chip-button:hover {
+  border-color: var(--bp-gold-block);
+  color: var(--bp-gold-block);
+  border-style: solid;
+}
+
+/* Tarihsiz kartlarda "+ tarih" yalnızca hover'da görünür */
+.chip-add-date {
+  opacity: 0;
+}
+
+.kanban-card:hover .chip-add-date,
+.chip-add-date:focus-visible {
+  opacity: 1;
+}
+
+.sort-select {
+  padding: 8px 10px;
+  border: 2px solid var(--bp-soul-soil);
+  border-radius: var(--md-shape-xs);
+  background-color: var(--bp-gilded-blackstone);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    var(--doku-gilded);
+  background-size: auto, var(--blok) var(--blok);
+  color: var(--bp-quartz-pillar);
+  font: var(--md-sys-typescale-label-small);
+  font-size: 13px;
+  box-shadow: var(--bevel-ince);
+}
+
+.sort-select:focus-visible {
+  outline: 2px solid var(--bp-gold-block);
+  outline-offset: 1px;
+}
+
+/* Metin gibi görünen düğme (uyarı kutusundaki "tamamlananları göster") */
+.linklike {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--bp-gold-block);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-shadow: none;
+}
+
+/* --- Kaydırma çubuğu: blok kenarı ----------------------------------------
+   Tarayıcının yumuşak çubuğu tema ile çelişiyordu; köşesiz, kalın ve
+   kabartmalı bir oluğa çevrilir. */
+
+* {
+  scrollbar-color: var(--bp-soul-soil) rgba(0, 0, 0, 0.4);
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--bp-soul-soil);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+    var(--doku-soul-soil);
+  background-size: var(--blok) var(--blok);
+  border: 2px solid color-mix(in srgb, var(--bp-soul-soil) 60%, black);
+  box-shadow: var(--bevel-ince);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--bp-gold-block);
+}
+
+/* --- Erişilebilirlik ve baskı -------------------------------------------- */
+
+/* Dokular ve kabartmalar kapatıldığında da arayüz okunur kalmalı. */
+@media (prefers-contrast: more) {
+  body::before,
+  .panel,
+  .column,
+  .kanban-card,
+  .topbar,
+  .modal,
+  .login-card,
+  .tl-scroll,
+  .tl-head {
+    background-image: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+
+
+
+/* ==========================================================================
+   TEMALAR
+   Varsayilan tema 'siyah-beyaz' (TikTok havasi); 'minecraft' block temasi;
+   'sims' acik yuzeyli The Sims havasi. tema, <html data-theme> üzerinde
+   durur; JS默认 codlara dokunmadan theme kitlesini yazar.
+   ========================================================================== */
+
+/* --- SIYAH BEYAZ (TikTok havası) — varsayılan ---------------------------- */
+
+:root[data-theme='siyah-beyaz'] {
+  --font-yazi: 'Inter', -apple-system, 'Segoe UI', system-ui, Roboto, sans-serif;
+  --yuzey: #0d0f11;
+  --kenar-kart: rgba(255, 255, 255, 0.16);
+  --golge-yazi: none;
+  --metin-ustbar: #eef2f4;
+
+  --bp-blackstone: #0d0f11;
+  --bp-gilded-blackstone: #12161a;
+  --bp-quartz-pillar: #eef1f3;
+  --bp-gold-block: #ffffff;
+  --bp-soul-soil: #3a4046;
+  --bp-soul-sand: #23272c;
+
+  --md-sys-color-background: #0b0d10;
+  --md-sys-color-on-background: #eef1f3;
+  --md-sys-color-surface: #0d0f11;
+  --md-sys-color-surface-variant: #171a1d;
+  --md-sys-color-surface-container: #121517;
+  --md-sys-color-surface-container-high: #1a1d20;
+  --md-sys-color-on-surface: #eef1f3;
+  --md-sys-color-on-surface-variant: #a9b2b8;
+  --md-sys-color-outline: #3a4046;
+  --md-sys-color-outline-variant: #23272c;
+  --md-sys-color-primary: #ffffff;
+  --md-sys-color-on-primary: #0d0f11;
+  --md-sys-color-primary-container: #22262a;
+  --md-sys-color-on-primary-container: #eef1f3;
+  --md-sys-color-secondary: #cfd6da;
+
+  --bg: #0b0d10;
+  --surface: #0d0f11;
+  --surface-2: #171a1d;
+  --text: #eef1f3;
+  --muted: #a9b2b8;
+  --border: #2a2f34;
+  --accent: #ffffff;
+  --accent-text: #0d0f11;
+
+  --md-shape-small: 8px;
+  --md-shape-medium: 12px;
+  --md-shape-large: 16px;
+  --md-shape-full: 9999px;
+
+  /* Yumuşak; piksel gönyüs ve sert kenarlar yok. */
+  --bevel: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --bevel-ince: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bevel-bakis: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --bevel-cukur: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --golge-blok: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow: var(--bevel-ince);
+  --shadow-lg: var(--bevel);
+  --radius: var(--md-shape-medium);
+
+  /* Doku yok (flat). */
+  --doku-blackstone: none;
+  --doku-gilded: none;
+  --doku-quartz: none;
+  --doku-gold: none;
+  --doku-soul-soil: none;
+  --doku-soul-sand: none;
+}
+
+/* Ust bar arka planı ve bá тутlar: tarayınca kayan blok katmanı ve text風
+   text-shadow var Những temas olika; METINŤ */
+:root[data-theme='siyah-beyaz'] body::before { display: none; }
+
+/* --- THE SIMS — açik yuzey, plumbob yeşili -------------------------------- */
+
+:root[data-theme='sims'] {
+  --font-yazi: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --yuzey: #ffffff;
+  --kenar-kart: rgba(23, 37, 41, 0.16);
+  --golge-yazi: none;
+  --metin-ustbar: #17252a;
+
+  --bp-blackstone: #22424a;
+  --bp-gilded-blackstone: #2b4a52;
+  --bp-quartz-pillar: #ffffff;
+  --bp-gold-block: #2f9e57;     /* plumbob yeşili */
+  --bp-soul-soil: #a9c3ca;
+  --bp-soul-sand: #cfdde2;
+
+  --md-sys-color-background: #e8eef1;
+  --md-sys-color-on-background: #17252a;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-surface-variant: #eef3f5;
+  --md-sys-color-surface-container: #f4f8fa;
+  --md-sys-color-surface-container-high: #e6edf1;
+  --md-sys-color-on-surface: #17252a;
+  --md-sys-color-on-surface-variant: #4b5f66;
+  --md-sys-color-outline: #a9c3ca;
+  --md-sys-color-outline-variant: #cfdde2;
+  --md-sys-color-primary: #2f9e57;
+  --md-sys-color-on-primary: #0c2413;
+  --md-sys-color-primary-container: #d9f4de;
+  --md-sys-color-on-primary-container: #114019;
+  --md-sys-color-secondary: #2b6c78;
+  --md-sys-color-error: #c34a40;
+
+  --bg: #e8eef1;
+  --surface: #ffffff;
+  --surface-2: #eef3f5;
+  --text: #17252a;
+  --muted: #4b5f66;
+  --border: #a9c3ca;
+  --accent: #2f9e57;
+  --accent-text: #0c2413;
+
+  --md-shape-small: 10px;
+  --md-shape-medium: 14px;
+  --md-shape-large: 18px;
+  --md-shape-full: 9999px;
+
+  --bevel: 0 12px 28px rgba(26, 44, 50, 0.16);
+  --bevel-ince: 0 1px 3px rgba(26, 44, 50, 0.14);
+  --bevel-bakis: 0 4px 10px rgba(26, 44, 50, 0.14);
+  --bevel-cukur: inset 0 0 0 1px rgba(23, 37, 41, 0.12);
+  --golge-blok: 0 6px 16px rgba(26, 44, 50, 0.16);
+  --shadow: var(--bevel-ince);
+  --shadow-lg: var(--bevel);
+  --radius: var(--md-shape-medium);
+
+  --doku-blackstone: none;
+  --doku-gilded: none;
+  --doku-quartz: none;
+  --doku-gold: none;
+  --doku-soul-soil: none;
+  --doku-soul-sand: none;
+}
+
+:root[data-theme='sims'] body::before { display: none; }
+:root[data-theme='siyah-beyaz'] *,
+:root[data-theme='sims'] * {
+  text-shadow: none !important;   /* piksel-fonın gölgeleri mono/sims'te gürültü */
+  image-rendering: auto;
+}
+:root[data-theme='minecraft'] { --golge-yazi: 2px 2px 0 rgba(0, 0, 0, 0.5); }
+
+/* --- Zaman çizelgesi: İptal Edilmiş görevler (soluk, gri) ------------------ */
+.tl-row.is-iptal,
+.tl-row.is-iptal .tl-label {
+  opacity: 0.45;
+}
+.tl-bar.is-iptal,
+.tl-milestone.is-iptal {
+  opacity: 0.4;
+  filter: grayscale(1);
 }

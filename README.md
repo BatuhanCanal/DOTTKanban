@@ -13,6 +13,22 @@ Companion, Planka'nın kaynak koduna dokunmaz; yalnızca Planka'nın REST API'si
 ayrı bir servistir. Bu sayede **Planka'yı güncellemek companion'ı bozmaz** — Planka'yı
 istediğiniz zaman `docker compose pull planka` ile yeni sürüme çekebilirsiniz.
 
+## Etiket türleri (kategoriler)
+
+Planka'da etiketler tek bir düz havuzdur; iki ayrı eksen bilmez. Companion'da **etiket türleri**
+tanımlanabilir: her tür bir görünüm ekseni olur. Örnekler:
+
+| Tür | Etiketler | Sonuç |
+|---|---|---|
+| **Ekip** | Organizasyon, Tasarım, Sosyal Medya | Panoda "Ekiplere göre" sekmesi açılır |
+| **Etkinlik Türü** | Tea&Talk, Tanışma Etkinliği, Workshop | Panoda "Etkinlik türüne göre" sekmesi açılır |
+
+- **Varsayılan görünüm:** "Duruma göre" (Başlanmadı / Yapılıyor / Tamamlandı sütunları).
+- **Tek seçim kuralı:** Bir kart aynı türde yalnızca **tek** etiket taşır. Sürükle-bırak ile
+  kart başka bir sütuna taşındığında eski etiketi otomatik kaldırılır.
+- **Yönetim:** Etiket türlerini yalnızca **Planka yöneticisi** oluşturup düzenleyebilir
+  (üst menüdeki "Etiket Türleri" sayfası). Etiketlerin kendisi Planka'da yaşar.
+
 ## Kavram eşlemesi
 
 | İstenen | Planka'daki karşılığı |

@@ -20,7 +20,7 @@ const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const LABEL_WIDTH = 240;
 const NO_LABEL = '__etiketsiz__';
 
-// Yakinlastirma basamaklari (piksel/gun). Aralik uzunluguna gore otomatik
+// Yakınlaştırma basamaklari (piksel/gun). Aralik uzunluguna gore otomatik
 // secilir; kullanici +/- ile bu merdivende yukari asagi gezinir.
 const ZOOM_STEPS = [3, 5, 7, 10, 13, 18, 26, 36, 50];
 
@@ -65,8 +65,8 @@ function autoZoomIndex(span) {
 }
 
 const MONTHS = [
-  'Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran',
-  'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik',
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralik',
 ];
 
 const formatDay = (day) => {
@@ -87,8 +87,16 @@ function initials(user) {
     .join('');
 }
 
-export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }) {
-  const [groupBy, setGroupBy] = useState('list');
+export default function Timeline({
+  board,
+  plankaUrl,
+  onEditDates,
+  onShiftDates,
+  grupSecenekleri,   // [[değer, etiket],...]: varsayılan pano görünümü
+  gosterPanoAdi,     // tüm panolar görünümünde kartın panosunu göster
+  saltOkunur,        // tüm panolar görünümü: sürükleme/tarih yaz kapalı
+}) {
+  const [groupBy, setGroupBy] = useState((grupSecenekleri || [['list']])[0][0]);
   const [hideDone, setHideDone] = useState(false);
   const [zoom, setZoom] = useState(null); // null = otomatik
   const [drag, setDrag] = useState(null); // yalnizca onizleme icin
@@ -123,7 +131,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
         continue;
       }
 
-      const overdue = Boolean(due) && due < bugun && !card.isDueCompleted;
+      const overdue = Boolean(due) && due < bugun && !card.isDueCompleted && !card.isIptal;
 
       if (card.isDueCompleted) doneCount += 1;
       if (overdue) overdueCount += 1;
@@ -165,6 +173,31 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
 
     if (groupBy === 'none') {
       groups = [{ id: 'all', title: null, items: [...dated].sort(byStart) }];
+    } else if (groupBy === 'pano') {
+      const groups0 = new Map();
+      for (const item of dated.sort(byStart)) {
+        const ad = item.card.boardName || 'Pano';
+        let g = groups0.get(ad);
+        if (!g) {
+          g = { id: ad, title: ad, items: [] };
+          groups0.set(ad, g);
+        }
+        g.items.push(item);
+      }
+      groups = [...groups0.values()]
+        .map((g) => ({ ...g, items: [...g.items].sort(byStart) }))
+        .filter((g) => g.items.length > 0);
+    } else if (groupBy.startsWith && groupBy.startsWith('grup:')) {
+      const grupId = groupBy.replace('grup:', '');
+      const gruplar = (board.groups || []).filter((g) => String(g.id) === String(grupId));
+      const grup = gruplar[0];
+      groups = [
+        {
+          id: `grup:${grupId}`,
+          title: grup ? grup.name : 'Grup',
+          items: dated.filter((item) => item.card.groups && item.card.groups[grupId]).sort(byStart),
+        },
+      ].filter((g) => g.items.length > 0);
     } else if (groupBy === 'label') {
       groups = [
         ...board.labels.map((label) => ({
@@ -345,6 +378,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
   }, [dragging, ppd, onShiftDates]);
 
   const startDrag = (event, item, mode) => {
+    if (saltOkunur) return;
     if (event.button !== 0) return;
 
     event.preventDefault();
@@ -364,6 +398,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
 
   /** Surukleme ile biten tiklamayi yutar; gercek tiklama tarih kutusunu acar. */
   const handleBarClick = (card) => {
+    if (saltOkunur || !onEditDates) return;
     if (draggedRef.current) {
       draggedRef.current = false;
       return;
@@ -382,7 +417,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
             'burada zaman ekseninde gorunecek.'}
         {hideDone && (
           <button type="button" className="linklike" onClick={() => setHideDone(false)}>
-            Tamamlananlari goster
+            Tamamlananları göster
           </button>
         )}
       </div>
@@ -405,14 +440,14 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
         </label>
 
         <div className="tl-control">
-          <span>Olcek</span>
+          <span>Ölçek</span>
           <div className="tl-zoom">
             <button
               type="button"
               onClick={() => setZoom(Math.max(zoomIndex - 1, 0))}
               disabled={zoomIndex === 0}
-              title="Uzaklastir"
-              aria-label="Uzaklastir"
+              title="Uzaklaştır"
+              aria-label="Uzaklaştır"
             >
               &minus;
             </button>
@@ -420,14 +455,14 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
               type="button"
               onClick={() => setZoom(Math.min(zoomIndex + 1, ZOOM_STEPS.length - 1))}
               disabled={zoomIndex === ZOOM_STEPS.length - 1}
-              title="Yakinlastir"
-              aria-label="Yakinlastir"
+              title="Yakınlaştır"
+              aria-label="Yakınlaştır"
             >
               +
             </button>
             {zoom !== null && (
               <button type="button" onClick={() => setZoom(null)} title="Otomatik olcege don">
-                sigdir
+                sığdır
               </button>
             )}
           </div>
@@ -439,19 +474,19 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
             checked={hideDone}
             onChange={(event) => setHideDone(event.target.checked)}
           />
-          <span>Tamamlananlari gizle</span>
+          <span>Tamamlananları gizle</span>
         </label>
 
         <button type="button" className="btn btn-sm" onClick={() => scrollToToday()}>
-          Bugune git
+          Bugüne git
         </button>
 
         <div className="spacer" />
 
         <div className="tl-summary">
-          <span>{model.dated} tarihli gorev</span>
+          <span>{model.dated} tarihli görev</span>
           {model.overdueCount > 0 && (
-            <span className="is-overdue">{model.overdueCount} gecikmis</span>
+            <span className="is-overdue">{model.overdueCount} gecikmiş</span>
           )}
           {model.doneCount > 0 && <span>{model.doneCount} tamamlandi</span>}
           {model.undatedCount > 0 && <span className="muted">{model.undatedCount} tarihsiz</span>}
@@ -461,7 +496,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
       <div className={`tl-scroll ${drag ? 'is-dragging' : ''}`} ref={scrollRef}>
         <div className="tl-inner" style={{ width: LABEL_WIDTH + width }}>
           <div className="tl-head">
-            <div className="tl-label tl-head-label">Gorev</div>
+            <div className="tl-label tl-head-label">Görev</div>
             <div className="tl-track tl-head-track" style={{ width }}>
               <div className="tl-months">
                 {months.map((month) => (
@@ -537,6 +572,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
                     ? item.card.tasksCompleted / item.card.tasksTotal
                     : null;
                 const state = [
+                  item.card.isIptal ? 'is-iptal' : '',
                   item.card.isDueCompleted ? 'is-done' : '',
                   item.overdue ? 'is-overdue' : '',
                   dragging ? 'is-moving' : '',
@@ -544,7 +580,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
                   .filter(Boolean)
                   .join(' ');
                 const hint = item.isMilestone
-                  ? `${item.card.name} — bitis ${formatDay(end)} (baslangic verilmemis)`
+                  ? `${item.card.name} — bitis ${formatDay(end)} (başlangıç verilmemiş)`
                   : `${item.card.name} — ${formatDay(start)} → ${formatDay(end)} (${days} gun)`;
 
                 return (
@@ -562,6 +598,11 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
                       {item.card.tasksTotal > 0 && (
                         <span className="tl-tasks" title="Kontrol listesi">
                           {item.card.tasksCompleted}/{item.card.tasksTotal}
+                        </span>
+                      )}
+                      {gosterPanoAdi && item.card.boardName && (
+                        <span className="tl-tasks" title="Panosu">
+                          {item.card.projectName} · {item.card.boardName}
                         </span>
                       )}
                       {item.members.map((user) => (
@@ -607,7 +648,7 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
                           <span
                             className="tl-handle tl-handle-start"
                             onMouseDown={(event) => startDrag(event, item, 'start')}
-                            title="Baslangic tarihini degistir"
+                            title="Başlangıç tarihini degistir"
                           />
                           <span
                             className="tl-handle tl-handle-end"
@@ -627,18 +668,18 @@ export default function Timeline({ board, plankaUrl, onEditDates, onShiftDates }
 
       <div className="tl-legend muted small">
         <span>
-          <i className="tl-swatch" /> baslangic &rarr; bitis
+          <i className="tl-swatch" /> başlangıç → bitiş
         </span>
         <span>
-          <i className="tl-swatch tl-swatch-diamond" /> yalnizca bitis tarihi var
+          <i className="tl-swatch tl-swatch-diamond" /> yalnızca bitiş tarihi var
         </span>
         <span>
           <i className="tl-swatch tl-swatch-done" /> tamamlandi
         </span>
         <span>
-          <i className="tl-swatch tl-swatch-progress" /> koyu bolum: biten kontrol listesi
+          <i className="tl-swatch tl-swatch-progress" /> koyu bölüm: biten kontrol listesi
         </span>
-        <span>Cubugu surukleyin, uclarindan boyutlandirin veya tiklayip tarihleri yazin.</span>
+        <span>Çubuğu sürükleyin, uclarindan boyutlandirin veya tiklayip tarihleri yazin.</span>
       </div>
     </>
   );

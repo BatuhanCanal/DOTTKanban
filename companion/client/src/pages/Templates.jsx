@@ -31,7 +31,7 @@ export default function Templates({ user, isAdmin, onAuthLost }) {
     isAdmin || (Boolean(template.createdByUserId) && template.createdByUserId === user.id);
 
   const remove = async (template) => {
-    if (!window.confirm(`"${template.name}" sablonu silinsin mi? Panolar etkilenmez.`)) {
+    if (!window.confirm(`"${template.name}" şablonu silinsin mi? Panolar etkilenmez.`)) {
       return;
     }
 
@@ -44,17 +44,17 @@ export default function Templates({ user, isAdmin, onAuthLost }) {
   };
 
   if (loading) {
-    return <div className="loading">Sablonlar yukleniyor...</div>;
+    return <div className="loading">Şablonlar yükleniyor...</div>;
   }
 
   return (
     <div className="container">
       <div className="page-head">
         <div>
-          <h1>Sablonlar</h1>
+          <h1>Şablonlar</h1>
           <p className="muted small" style={{ margin: '4px 0 0' }}>
-            Tekrar eden etkinlikler icin hazir pano yapilari. Bir panoyu sablona cevirmek icin
-            panoyu acip &ldquo;Sablon olarak kaydet&rdquo; deyin.
+            Tekrar eden etkinlikler için hazır pano yapıları. Bir panoyu şablona çevirmek için
+            panoyu açıp &ldquo;Şablon olarak kaydet&rdquo; deyin.
           </p>
         </div>
       </div>
@@ -64,14 +64,14 @@ export default function Templates({ user, isAdmin, onAuthLost }) {
 
       <div className="panel">
         <div className="panel-head">
-          <h2>Kayitli sablonlar</h2>
+          <h2>Kayıtlı şablonlar</h2>
           <span className="muted small">{data ? data.templates.length : 0} adet</span>
         </div>
 
         {data && data.templates.length === 0 ? (
           <div className="empty">
-            Henuz sablon yok. Bir etkinlik panosunu acip &ldquo;Sablon olarak kaydet&rdquo;
-            dediginizde burada gorunecek.
+            Henüz şablon yok. Bir etkinlik panosunu açıp &ldquo;Şablon olarak kaydet&rdquo;
+            dediğinizde burada görünecek.
           </div>
         ) : (
           data &&
@@ -80,7 +80,7 @@ export default function Templates({ user, isAdmin, onAuthLost }) {
               <div className="row-main">
                 <div className="row-title">{template.name}</div>
                 <div className="muted small">
-                  {template.stats.lists} sutun &middot; {template.stats.labels} etiket &middot;{' '}
+                  {template.stats.lists} sütun &middot; {template.stats.labels} etiket &middot;{' '}
                   {template.stats.cards} kart
                   {template.sourceBoardName ? ` · kaynak: ${template.sourceBoardName}` : ''}
                   {template.createdBy ? ` · ${template.createdBy}` : ''} &middot;{' '}
@@ -98,7 +98,7 @@ export default function Templates({ user, isAdmin, onAuthLost }) {
                 className="btn btn-sm btn-primary"
                 onClick={() => setUsing(template)}
               >
-                Bu sablondan etkinlik ac
+                Bu şablondan etkinlik aç
               </button>
               {canManage(template) && (
                 <>
@@ -167,15 +167,15 @@ function RenameTemplateModal({ template, onClose, onSaved }) {
 
   return (
     <Modal
-      title="Sablonu duzenle"
-      subtitle="Yalnizca sablonun adi ve aciklamasi degisir; icindeki yapiya dokunulmaz."
+      title="Şablonu düzenle"
+      subtitle="Yalnızca şablonun adı ve açıklaması değişir; içindeki yapıya dokunulmaz."
       onClose={onClose}
     >
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="field">
-          <label htmlFor="rename-name">Sablon adi</label>
+          <label htmlFor="rename-name">Şablon adı</label>
           <input
             id="rename-name"
             type="text"
@@ -186,19 +186,19 @@ function RenameTemplateModal({ template, onClose, onSaved }) {
         </div>
 
         <div className="field">
-          <label htmlFor="rename-description">Aciklama (istege bagli)</label>
+          <label htmlFor="rename-description">Açıklama (isteğe bağlı)</label>
           <input
             id="rename-description"
             type="text"
             value={description}
-            placeholder="Orn. iki gunluk atolye duzeni"
+            placeholder="Örn. iki günlük atölye düzeni"
             onChange={(event) => setDescription(event.target.value)}
           />
         </div>
 
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onClose}>
-            Vazgec
+            Vazgeç
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
             {busy ? 'Kaydediliyor...' : 'Kaydet'}
@@ -246,11 +246,11 @@ function UseTemplateModal({ template, projects, onClose }) {
 
   if (result) {
     return (
-      <Modal title={result.partial ? 'Kismen olusturuldu' : 'Etkinlik olusturuldu'} onClose={onClose}>
+      <Modal title={result.partial ? 'Kısmen oluşturuldu' : 'Etkinlik oluşturuldu'} onClose={onClose}>
         <div className={`alert ${result.partial ? 'alert-error' : 'alert-success'}`}>
           {result.partial
             ? result.error
-            : `Yeni pano hazir: ${result.stats.lists} sutun, ${result.stats.labels} etiket, ${result.stats.cards} kart olusturuldu.`}
+            : `Yeni pano hazır: ${result.stats.lists} sütun, ${result.stats.labels} etiket, ${result.stats.cards} kart olusturuldu.`}
         </div>
         <div className="modal-actions">
           <a className="btn btn-primary" href={result.url} target="_blank" rel="noreferrer">
@@ -266,8 +266,8 @@ function UseTemplateModal({ template, projects, onClose }) {
 
   return (
     <Modal
-      title="Sablondan etkinlik ac"
-      subtitle={`"${template.name}" sablonundaki yapi yeni bir panoya kurulacak.`}
+      title="Şablondan etkinlik aç"
+      subtitle={`"${template.name}" şablonundaki yapı bir panoya kurulacak.`}
       onClose={onClose}
     >
       <form onSubmit={submit}>
@@ -290,7 +290,7 @@ function UseTemplateModal({ template, projects, onClose }) {
         </div>
 
         <div className="field">
-          <label htmlFor="use-name">Etkinlik (pano) adi</label>
+          <label htmlFor="use-name">Etkinlik (pano) adı</label>
           <input
             id="use-name"
             type="text"
@@ -307,10 +307,10 @@ function UseTemplateModal({ template, projects, onClose }) {
             onChange={(event) => setIncludeCards(event.target.checked)}
           />
           <span>
-            Kartlar da olusturulsun
+            Kartlar da oluşturulsun
             <br />
             <span className="muted small">
-              Kapatirsaniz sadece sutunlar ve etiketler kurulur, kartlari sifirdan yazarsiniz.
+              Kapatırsanız sadece sütunlar ve etiketler kurulur, kartları sıfırdan yazarsınız.
             </span>
           </span>
         </label>
@@ -323,20 +323,20 @@ function UseTemplateModal({ template, projects, onClose }) {
             onChange={(event) => setResetToFirstList(event.target.checked)}
           />
           <span>
-            Tum kartlar ilk sutundan bassin
+            Tüm kartlar ilk sütundan başlasın
             <br />
             <span className="muted small">
-              Kapatirsaniz kartlar sablondaki sutunlarinda kalir.
+              Kapatırsanız kartlar şablondaki sütunlarında kalır.
             </span>
           </span>
         </label>
 
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onClose}>
-            Vazgec
+            Vazgeç
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy || !projectId}>
-            {busy ? 'Olusturuluyor...' : 'Olustur'}
+            {busy ? 'Oluşturuluyor...' : 'Oluştur'}
           </button>
         </div>
       </form>

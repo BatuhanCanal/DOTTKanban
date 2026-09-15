@@ -54,7 +54,28 @@ export const api = {
     request('PUT', `/api/cards/${cardId}/start-date`, { boardId, startDate }),
   setDueDate: (cardId, dueDate) => request('PUT', `/api/cards/${cardId}/due-date`, { dueDate }),
 
-  templates: () => request('GET', '/api/templates'),
+  // Etiket turleri (Ekip, Etkinlik Turu...) — admin tarafindan yonetilir.
+  labelGroups: () => request('GET', '/api/label-groups'),
+  createLabelGroup: (name) => request('POST', '/api/label-groups', { name }),
+  renameLabelGroup: (id, name) => request('PATCH', `/api/label-groups/${id}`, { name }),
+  deleteLabelGroup: (id) => request('DELETE', `/api/label-groups/${id}`),
+  boardLabels: (boardId) => request('GET', `/api/boards/${boardId}/labels`),
+  addLabelToGroup: (groupId, boardId, labelId) =>
+    request('POST', `/api/label-groups/${groupId}/labels`, { boardId, labelId }),
+  removeLabelFromGroup: (groupId, boardId, labelId) =>
+    request('DELETE', `/api/label-groups/${groupId}/labels/${boardId}/${labelId}`),
+
+  // Görev ekle (etiket türleri zorunlu) + varsayılan listeler.
+  createKart: (boardId, data) =>
+    request('POST', `/api/boards/${boardId}/cards`, data),
+  varsayilanListeler: (boardId) =>
+    request('POST', `/api/boards/${boardId}/varsayilan-listeler`),
+  eksikListeler: (boardId) => request('GET', `/api/boards/${boardId}/eksik-listeler`),
+
+  // Tüm panoların görevlerini tek kuruluşta toplam sür.
+  tumZamanCizelgesi: () => request('GET', '/api/zaman-cizelgesi/tumu'),
+
+  templates: () =>  request('GET', '/api/templates'),
   saveTemplate: (boardId, name, description) =>
     request('POST', '/api/templates', { boardId, name, description }),
   renameTemplate: (id, name, description) =>

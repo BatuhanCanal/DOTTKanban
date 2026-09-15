@@ -6,10 +6,29 @@ import Login from './pages/Login.jsx';
 import Hub from './pages/Hub.jsx';
 import Board from './pages/Board.jsx';
 import Templates from './pages/Templates.jsx';
+import Admin from './pages/Admin.jsx';
+import TumZamanCizelgesi from './pages/TumZamanCizelgesi.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null); // { user, isAdmin, plankaUrl }
   const [checking, setChecking] = useState(true);
+
+  /* Tema seçimi: üst bardaki seçici, localStorage'a yazar. CORS yok,
+     hemen HTML köünginte data-theme'i güncelleyip CSS token'ları değişir. */
+  const GECERLI_TEMALAR = { 'siyah-beyaz': 'Siyah beyaz', minecraft: 'Minecraft', sims: 'The Sims' };
+  const [tema, setTema] = useState(document.documentElement.dataset.theme || 'siyah-beyaz');
+
+  const temaDegistir = (event) => {
+    const yeni = event.target.value;
+    if (!GECERLI_TEMALAR[yeni]) return;
+    document.documentElement.dataset.theme = yeni;
+    try {
+      localStorage.setItem('dott-tema', yeni);
+    } catch {
+      /* private/mods: localStorage kapalı olabilir; tema oturuma özgü kalsın */
+    }
+    setTema(yeni);
+  };
 
   const refreshSession = useCallback(async () => {
     try {
@@ -51,17 +70,31 @@ export default function App() {
             <NavLink to="/" end>
               Etkinlikler
             </NavLink>
-            <NavLink to="/sablonlar">Sablonlar</NavLink>
+            <NavLink to="/sablonlar">Şablonlar</NavLink>
+            <NavLink to="/zaman-cizelgesi">Zaman Çizelgesi</NavLink>
+            {session.isAdmin && <NavLink to="/admin">Etiket Türleri</NavLink>}
           </nav>
           <div className="spacer" />
+          <select
+            className="sort-select tema-secici"
+            value={tema}
+            onChange={temaDegistir}
+            aria-label="Görünüm (tema)"
+            title="Görünüm teması"
+          >
+            {Object.entries(GECERLI_TEMALAR).map(([k, v]) => (
+              <option key={k} value={k}>{k === 'sims' ? 'The Sims' : GECERLI_TEMALAR[k]}</option>
+            ))}
+          </select>
           <a
             className="btn btn-sm"
             href={session.plankaUrl}
             target="_blank"
             rel="noreferrer"
-            title="Kartlari duzenlemek, yorum yazmak ve dosya eklemek icin Planka'yi kullanin"
+            title="Kartları düzenlemek, yorum yazmak ve dosya eklemek için Planka'yı kullanın"
           >
-            Planka'yi ac
+            <span className="icon icon-sm">open_in_new</span>
+            Planka'yı aç
           </a>
           <span className="user-chip">{session.user.name || session.user.username}</span>
           <button
@@ -72,7 +105,8 @@ export default function App() {
               setSession(null);
             }}
           >
-            Cikis
+            <span className="icon icon-sm">logout</span>
+            Çıkış
           </button>
         </div>
       </header>
@@ -87,6 +121,17 @@ export default function App() {
           path="/sablonlar"
           element={
             <Templates user={session.user} isAdmin={session.isAdmin} onAuthLost={handleAuthLost} />
+          }
+        />
+        <Route path="/zaman-cizelgesi" element={<TumZamanCizelgesi plankaUrl={session.plankaUrl} onAuthLost={handleAuthLost} />} />
+        <Route
+          path="/admin"
+          element={
+            session.isAdmin ? (
+              <Admin onAuthLost={handleAuthLost} />
+            ) : (
+              <Navigate to="/" replace />
+            )
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

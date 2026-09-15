@@ -16,6 +16,7 @@ const config = require('../config');
 const { requireAuth, isAdmin } = require('../auth');
 const { asyncRoute } = require('../http');
 const { buildSnapshot } = require('../board-data');
+const varsayilan = require('../varsayilan-listeler');
 
 const GAP = planka.POSITION_GAP;
 
@@ -234,6 +235,12 @@ module.exports = (app) => {
           includeCards,
           resetToFirstList,
         });
+
+        // Kullanici kurali: her yeni etkinlik panosu 4 varsayilan listeyle
+        // gelir (Başlanmadı/Yapılıyor/Yapıldı/İptal Edildi). Şablonda
+        // olmayanlar burada tamamlanır.
+        const varsayilanSonuc = await varsayilan.ensure(req.plankaToken, boardId);
+        stats.varsayilanListeler = varsayilanSonuc.eklendi.length;
 
         res.status(201).json({ boardId, url: boardUrl(boardId), stats });
       } catch (error) {

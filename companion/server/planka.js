@@ -17,7 +17,7 @@ const POSITION_GAP = 65536;
 class PlankaError extends Error {
   constructor(status, body) {
     const message =
-      (body && (body.message || body.problems || body.code)) || `Planka API hatasi (${status})`;
+      (body && (body.message || body.problems || body.code)) || `Planka API hatası (${status})`;
     super(typeof message === 'string' ? message : JSON.stringify(message));
     this.name = 'PlankaError';
     this.status = status;
@@ -56,7 +56,7 @@ async function request(token, method, path, body) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
-    throw new PlankaError(502, { message: `Planka'ya ulasilamiyor: ${error.message}` });
+    throw new PlankaError(502, { message: `Planka'ya ulaşılamıyor: ${error.message}` });
   }
 
   const text = await response.text();

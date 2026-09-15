@@ -34,6 +34,8 @@ registerAuthRoutes(app);
 require('./routes/hub')(app);
 require('./routes/boards')(app);
 require('./routes/templates')(app);
+require('./routes/label-groups')(app);
+require('./routes/zaman-cizelgesi')(app);
 
 // --- Arayuz (Vite ile derlenmis React uygulamasi) --------------------------
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
